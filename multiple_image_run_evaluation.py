@@ -103,38 +103,17 @@ def save_to_txt(test_acc, test_top5_acc, classification_report_save_path, y_true
         f.write(classification_report(y_true, y_pred, zero_division=0))
         f.write('\n')
 
-
-def get_class2num(path):
-    """
-    get part class2num dict
-
-    Args:
-        path : dataset path
-
-    Returns:
-        class2num: part class2num dict
-    """
-
-    model_list = os.listdir(path)
-    model_list.sort()
-    class2num = {}
-    for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
-        class2num[class_name] = idx
-    return class2num
-
-
 if __name__ == "__main__":
-    is_save_summary = True
-    input_num = 3  ####need setup this value,ex:1,3
-    use_length_detection = True
+    is_save_summary = False
+    input_num = 1  ####need setup this value,ex:1,3
+    use_length_detection = False
     # ===== 0. get setting =====
-    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'M11-augmentation_90_50_r')
-    test_image_path = os.path.join('50_classes', '10_test_new', )
+    pretrained_root = os.path.join('records', 'FGVC-HERBS', '50_ssl')
+    test_image_path = 'C://Users//user//Documents//FGVC-HERBS-master//50_classes//test'#os.path.join('50_classes', '10_test_new', )
     parser = argparse.ArgumentParser("Visualize SwinT Large")
 
     args = parser.parse_args()
-    model_pt_path = os.path.join(pretrained_root, "save_model", "best.pth")
+    model_pt_path = os.path.join(pretrained_root, "save_model", "last.pth")
     pt_file = torch.load(model_pt_path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
     # ===== 1. build model =====
     model = build_model(pretrainewd_path=model_pt_path,
@@ -186,17 +165,16 @@ if __name__ == "__main__":
     for ci, cf in enumerate(cls_folders):
         # get class name from folder
         class_name = cf.split('.iam')[0].split('.ipt')[0]
-        if '-' in class_name:
-            class_name = class_name.split('-')[1]
+
         # init dict
-        if class2num[cf] not in top1_dic:
-            top1_dic[class2num[cf]] = 0
-        if class2num[cf] not in top5_dic:
-            top5_dic[class2num[cf]] = 0
-        if class2num[cf] not in pd_total_class_img_num_dict:
-            pd_total_class_img_num_dict[class2num[cf]] = 0
-        if class2num[cf] not in pd_class_name_list:
-            pd_class_name_list[class2num[cf]] = cf
+        if class2num[class_name] not in top1_dic:
+            top1_dic[class2num[class_name]] = 0
+        if class2num[class_name] not in top5_dic:
+            top5_dic[class2num[class_name]] = 0
+        if class2num[class_name] not in pd_total_class_img_num_dict:
+            pd_total_class_img_num_dict[class2num[class_name]] = 0
+        if class2num[class_name] not in pd_class_name_list:
+            pd_class_name_list[class2num[class_name]] = class_name
 
         files = os.listdir(os.path.join(test_image_path, cf))
         files.sort()
@@ -223,13 +201,13 @@ if __name__ == "__main__":
         for img_path in selected_paths:
             tmp_probs_list = []
             tmp_preds_list = []
-            pd_total_class_img_num_dict[class2num[cf]] += 1
+            pd_total_class_img_num_dict[class2num[class_name]] += 1
             for idx, img_name in enumerate(img_path):
 
                 # record predict result
                 pd_img_name.append(img_name)
-                pd_class_idx.append(class2num[cf])
-                pd_class_name.append(cf)
+                pd_class_idx.append(class2num[class_name])
+                pd_class_name.append(class_name)
 
                 img_path = os.path.join(test_image_path, cf, img_name)
                 img_paths.append(img_path)
@@ -271,13 +249,13 @@ if __name__ == "__main__":
             if class2num[class_name] in preds[0][:1]:
                 top1 += 1
                 top_1_num_correct += 1
-                top1_dic[class2num[cf]] += 1
+                top1_dic[class2num[class_name]] += 1
             if class2num[class_name] in preds[0][:3]:
                 top3 += 1
             if class2num[class_name] in preds[0][:5]:
                 top5 += 1
                 top_5_num_correct += 1
-                top5_dic[class2num[cf]] += 1
+                top5_dic[class2num[class_name]] += 1
             if class2num[class_name] in preds[0][:7]:
                 top7 += 1
             total += update_n

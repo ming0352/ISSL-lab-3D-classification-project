@@ -9,18 +9,13 @@ import numpy as np
 import cv2
 import os,time
 import argparse
-import timm
 import matplotlib
 import matplotlib.pyplot as plt
-import seaborn as sns
-
-from utils.config_utils import load_yaml
 from vis_utils import ImgLoader, get_cdict
-
 global module_id_mapper
 global features
 global grads
-
+from tqdm import tqdm
 def forward_hook(module: nn.Module, inp_hs, out_hs):
     global features, module_id_mapper
     layer_id = len(features) + 1
@@ -189,55 +184,14 @@ def sum_all_out(out, sum_type="softmax"):
         else:
             sum_out = sum_out + tmp_out  # note that use '+=' would cause inplace error
     return sum_out/len(target_layer_names)
-def get_class2num(path):
-    """
-    get part class2num dict
 
-    Args:
-        path : dataset path
 
-    Returns:
-        class2num: part class2num dict
-    """
-
-    model_list = os.listdir(path)
-    model_list.sort()
-    class2num = {}
-    for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
-        class2num[class_name] = idx
-    return class2num
-def get_num2class(path):
-    """
-    get part class2num dict
-
-    Args:
-        path : dataset path
-
-    Returns:
-        class2num: part class2num dict
-    """
-
-    model_list = os.listdir(path)
-    model_list.sort()
-    num2class = {}
-    for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
-        num2class[idx] = class_name
-    return num2class
 if __name__ == "__main__":
-
-
-
-    """
-    Please add 
-    pretrained_path to yaml file.
-    """
-    no_centercrop_list = []
+    save_folder_name = 'vis_center'#######
     start_time=time.time()
     # ===== 0. get setting =====
-    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'M11-augmentation_90_n')
-    test_image_path=os.path.join('dataset','M11','test')
+    pretrained_root = os.path.join('records','FGVC-HERBS','M11-augmentation_90_n')
+    test_image_path = os.path.join('dataset','M11','test')
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
     parser.add_argument("-lb", "--label", type=int)
@@ -246,7 +200,7 @@ if __name__ == "__main__":
 
     folder_list=[name for name in os.listdir(test_image_path) if os.path.isdir(os.path.join(test_image_path, name))]
 
-    is_show_top_5_prediction=True
+    is_show_top_5_prediction=False
 
     model_pt_path = os.path.join(pretrained_root , "save_model","best.pth")
     pt_file = torch.load(model_pt_path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
@@ -260,7 +214,11 @@ if __name__ == "__main__":
     total_time=0.0
     class2num = pt_file['class2num']
     n_img=0
-    save_folder_name = 'vis_center_ori'
+    n_samples=0
+    update_n=0
+    for ci, cf in enumerate(folder_list):
+        n_samples += len(os.listdir(os.path.join(test_image_path,cf)))
+    pbar = tqdm(total=n_samples, ascii=True)
     load_model_time = time.time() - start_time
     # ===== 2. load image =====
     for i,folder in enumerate(folder_list):
@@ -268,6 +226,7 @@ if __name__ == "__main__":
         img_list=os.listdir(os.path.join(test_image_path,f'{folder}'))
 
         for k,image in enumerate(img_list):
+            update_n += 1
             global module_id_mapper, features, grads
             module_id_mapper, features, grads = {}, {}, {}
             n_img+=1
@@ -336,4 +295,7 @@ if __name__ == "__main__":
                 #plt.show()
                 plt.clf()
                 plt.close('all')
+                pbar.update(update_n)
+                update_n = 0
+
     print(f'total time:{total_time+load_model_time},avg:{(total_time+load_model_time)/n_img}')

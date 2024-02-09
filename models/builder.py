@@ -251,7 +251,15 @@ def build_swintransformer(pretrained: bool = True,
         }
     # swin_base_patch4_window12_384_in22k
     backbone = timm.create_model('swin_large_patch4_window12_384_in22k', pretrained=pretrained)
-
+    if True:
+        print('use SSL pretrained backbone')
+        # SKD 100 pretrained
+        pretrained = torch.load('best.pth')
+        pretrained_dict = {k: v for k, v in pretrained['model'].items() if k in backbone.state_dict() and ('patch' in k or'layer' in k or 'norm' in k )}
+        # for k, v in pretrained['model'].items(): or 'head' in k
+        #     print(k)
+        #backbone.head = torch.nn.Linear(in_features=1536, out_features=88, bias=True)
+        backbone.load_state_dict(pretrained_dict, strict=False)
     # print(backbone)
     # print(get_graph_node_names(backbone))
     backbone.train()

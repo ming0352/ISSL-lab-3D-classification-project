@@ -22,10 +22,7 @@ def get_train_image_list(dataset_path,translate_class2num):
                 continue
             img_path = os.path.join(dataset_path, class_ , img)
             img_path_list.append(img_path)
-            class_name = class_.split('.iam')[0].split('.ipt')[0]
-            if '-' in class_name:
-                class_name = class_name.split('-')[1]
-            img_classes_list.append(translate_class2num[class_name])
+            img_classes_list.append(translate_class2num[class_])
 
     return img_path_list,img_classes_list
 def get_class2num(path):
@@ -44,10 +41,7 @@ def get_class2num(path):
     model_list.sort()
     class2num = {}
     for idx, item in enumerate(model_list):
-        class_name = item.split('.iam')[0].split('.ipt')[0].split('-A')[0]
-        if '-' in class_name:
-            class_name=class_name.split('-')[1]
-        class2num[class_name] = idx
+        class2num[item] = idx
     return class2num
 def get_num2class(path):
     """
@@ -63,10 +57,7 @@ def get_num2class(path):
     model_list.sort()
     num2class = {}
     for idx, item in enumerate(model_list):
-        class_name = item.split('.iam')[0].split('.ipt')[0].split('-A')[0]  # .split('-')[1]
-        if '-' in class_name:
-            class_name = class_name.split('-')[1]
-        num2class[idx] = class_name
+        num2class[idx] = item
     return num2class
 
 def build_loader(args,is_train_aug=False,add_hands=False):

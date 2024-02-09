@@ -124,7 +124,7 @@ def _cal_evalute_metric(corrects: dict,
                         score_names: Union[list, None] = None):
     
     tmp_score = torch.softmax(logits, dim=-1)
-    tmp_corrects = top_k_corrects(tmp_score, labels, tops=[1, 3]) # return top-1, top-3, top-5 accuracy
+    tmp_corrects = top_k_corrects(tmp_score, labels, tops=[1]) # return top-1, top-3, top-5 accuracy  tops=[1, 3]#######
     
     ### each layer's top-1, top-3 accuracy
     for name in tmp_corrects:

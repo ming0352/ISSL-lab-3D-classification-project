@@ -1,9 +1,9 @@
 project_name: FGVC-HERBS
 notes: 'no inverse'
-exp_name: hand_bgg
+exp_name: 50_ssl
 use_wandb: True
 wandb_entity: ~
-train_root: ./dataset/M11/train/90/
+train_root: C:\Users\user\Documents\FGVC-HERBS-master\50_classes\train #./dataset/M11/train/90/
 val_root: ./CUB200-2011/test/
 data_size: 384
 num_workers: 2

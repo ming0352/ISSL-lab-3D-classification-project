@@ -137,8 +137,8 @@ def get_class2num(path):
     return class2num
 if __name__ == "__main__":
     # ===== 0. get setting =====
-    pretrained_root=os.path.join('records','FGVC-HERBS','M11-augmentation_90_n')
-    test_image_path=os.path.join('dataset','M11','test')
+    pretrained_root='C:/Users/user/Documents/FGVC-HERBS-master/records/FGVC-HERBS/M11_aug_90_50_retrain_10/'#os.path.join('records','FGVC-HERBS','M11-augmentation_90_n')
+    test_image_path='C:/Users/user/Documents/FGVC-HERBS-master/50_classes/test'#os.path.join('dataset','M11','test')
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
 

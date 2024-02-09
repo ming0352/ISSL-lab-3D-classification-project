@@ -55,4 +55,7 @@ You can choose how many image you  want to infer once by setting input_num .Now 
 
 # 4. Visualize result
 
+#### 4.1 How to visualze result
 If you want to visualize model result, you can run vis_swin_l.py , remember to change test model path and test data folder
+#### 4.2 change save result folder
+The result will save in pretrained model folder(ex:/record/project name/...),you can change folder name by modify <save_folder_name> variable.
