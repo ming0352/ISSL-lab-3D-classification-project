@@ -29,6 +29,8 @@ def create_model(
         scriptable=None,
         exportable=None,
         no_jit=None,
+        out_feature=True,
+        ssl=False,
         **kwargs):
     """Create a model
 
@@ -78,7 +80,7 @@ def create_model(
         raise RuntimeError('Unknown model (%s)' % model_name)
 
     with set_layer_config(scriptable=scriptable, exportable=exportable, no_jit=no_jit):
-        model = create_fn(pretrained=pretrained, **kwargs)
+        model = create_fn(pretrained=pretrained,out_feature=out_feature,ssl=ssl, **kwargs)
 
     if checkpoint_path:
         load_checkpoint(model, checkpoint_path)

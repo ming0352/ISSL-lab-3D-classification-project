@@ -1,9 +1,9 @@
-name: py311
+name: 3d
 channels:
   - pytorch
   - nvidia
-  - anaconda
   - conda-forge
+  - anaconda
   - defaults
 dependencies:
   - aiofiles=22.1.0=py311haa95532_0
@@ -221,8 +221,6 @@ dependencies:
   - scikit-learn=1.3.0=py311hf62ec03_0
   - scikit-learn-intelex=2023.1.1=py311haa95532_0
   - scipy=1.11.1=py311hc1ccb85_0
-  - seaborn=0.12.2=hd8ed1ab_0
-  - seaborn-base=0.12.2=pyhd8ed1ab_0
   - send2trash=1.8.0=pyhd3eb1b0_1
   - sentry-sdk=1.32.0=pyhd8ed1ab_0
   - setproctitle=1.2.2=py311h2bbff1b_0
@@ -251,7 +249,6 @@ dependencies:
   - tornado=6.3.2=py311h2bbff1b_0
   - tqdm=4.66.1=pyhd8ed1ab_0
   - traitlets=5.7.1=py311haa95532_0
-  - typing_extensions=4.7.1=py311haa95532_0
   - tzdata=2023c=h04d1e81_0
   - urllib3=1.26.16=py311haa95532_0
   - vc=14.2=h21ff451_1
@@ -326,6 +323,7 @@ dependencies:
       - python-multipart==0.0.6
       - rembg==2.0.52
       - rich==13.7.0
+      - seaborn==0.13.2
       - semantic-version==2.10.0
       - shellingham==1.5.4
       - starlette==0.27.0
@@ -341,4 +339,4 @@ dependencies:
       - websockets==11.0.3
       - widgetsnbextension==4.0.9
       - yarl==1.9.3
-prefix: C:\Users\user\.conda\envs\py311
+prefix: C:\Users\user\.conda\envs\3d

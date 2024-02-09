@@ -1,7 +1,7 @@
 import torch
 from typing import Union
 from torchvision.models.feature_extraction import get_graph_node_names
-
+from collections import OrderedDict
 from .pim_module import pim_module
 
 """
@@ -24,7 +24,9 @@ return features directly.
 Please check 'timm/models/swin_transformer.py' line 541 to see how to change model if your costom
 model also fail at create_feature_extractor or get_graph_node_names step.
 """
-
+import yaml
+with open("./configs/HERBS_config.yaml", "r", encoding = "utf8") as stream:
+    conf = yaml.load(stream, Loader=yaml.CLoader)
 def load_model_weights(model, model_path):
     ### reference https://github.com/TACJu/TransFG
     ### thanks a lot.
@@ -250,18 +252,25 @@ def build_swintransformer(pretrained: bool = True,
             'layer4':32
         }
     # swin_base_patch4_window12_384_in22k
-    backbone = timm.create_model('swin_large_patch4_window12_384_in22k', pretrained=pretrained)
-    if True:
-        print('use SSL pretrained backbone')
+    #swin_tiny_patch4_window7_224
+    if pretrained==False:
+        print("doesn't use ImageNet pretrained weight")
+    else:
+        print("use ImageNet pretrained weight")
+    backbone = timm.create_model('swin_large_patch4_window12_384_in22k', pretrained=pretrained)#swin_large_patch4_window12_384_in22k
+
+    if conf['use_ssl_pretrained_backbone'] is True:
+        folder_name = conf['ssl_pretrained_model_name']
+        print(f'use {folder_name} SSL pretrained backbone')
         # SKD 100 pretrained
-        pretrained = torch.load('best.pth')
+
+        pretrained = torch.load(f'./pretrained_model/{folder_name}/best.pth')
         pretrained_dict = {k: v for k, v in pretrained['model'].items() if k in backbone.state_dict() and ('patch' in k or'layer' in k or 'norm' in k )}
         # for k, v in pretrained['model'].items(): or 'head' in k
         #     print(k)
         #backbone.head = torch.nn.Linear(in_features=1536, out_features=88, bias=True)
         backbone.load_state_dict(pretrained_dict, strict=False)
-    # print(backbone)
-    # print(get_graph_node_names(backbone))
+
     backbone.train()
     
     print("Building...")
@@ -311,7 +320,7 @@ if __name__ == "__main__":
 
 MODEL_GETTER = {
     "resnet50":build_resnet50,
-    "swin-t":build_swintransformer,
+    "swin-l":build_swintransformer,
     "vit":build_vit16,
     "efficient":build_efficientnet
 }

@@ -7,11 +7,13 @@ from sklearn.model_selection import train_test_split
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from utils.combine_bg import combine_hands
+from sklearn.model_selection import KFold, StratifiedKFold
 def get_train_image_list(dataset_path,translate_class2num):
     # get image list
     img_path_list = []
     img_classes_list = []
     skiped_list = []
+    #classes = translate_class2num.keys()
     classes=[name for name in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, name))]
     for class_ in classes:
         if not os.path.isdir(os.path.join(dataset_path ,class_)):
@@ -22,7 +24,56 @@ def get_train_image_list(dataset_path,translate_class2num):
                 continue
             img_path = os.path.join(dataset_path, class_ , img)
             img_path_list.append(img_path)
-            img_classes_list.append(translate_class2num[class_])
+            class_name = class_ #class_.split('.iam')[0].split('.ipt')[0]
+            # if '-' in class_name:
+            #     class_name = class_name.split('-')[1]
+            img_classes_list.append(translate_class2num[class_name])
+
+    return img_path_list,img_classes_list
+def get_MVImgNet_train_image_list(dataset_path,translate_class2num):
+    # get image list
+    img_path_list = []
+    img_classes_list = []
+    skiped_list = []
+    # classes = translate_class2num.keys()
+    classes = [name for name in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, name))]
+    for class_ in classes:
+        if not os.path.isdir(os.path.join(dataset_path, class_)):
+            continue
+        for img in os.listdir(os.path.join(dataset_path, class_,'images')):
+            if (img[-3:] != "jpg") and (img[-3:] != "png"):
+                skiped_list.append(img)
+                continue
+            img_path = os.path.join(dataset_path, class_,'images', img)
+            img_path_list.append(img_path)
+            class_name = class_
+            img_classes_list.append(translate_class2num[class_name])
+    return img_path_list, img_classes_list
+def get_MVImgNet_train_image_list_ori(dataset_path,translate_class2num):
+    # get image list
+    img_path_list = []
+    img_classes_list = []
+    skiped_list = []
+    #classes = translate_class2num.keys()
+    classes=os.listdir(dataset_path)
+    classes.sort()
+    for class_ in classes:
+        if not os.path.isdir(os.path.join(dataset_path ,class_)):
+            continue
+        second_folder_list=os.listdir(os.path.join(dataset_path, class_))
+        second_folder_list.sort()
+        for k,i in enumerate(second_folder_list):
+            if k==3: break
+            for img in os.listdir(os.path.join(dataset_path ,class_,i,'images')):
+                if (img[-3:] != "jpg") and (img[-3:] != "png"):
+                    skiped_list.append(img)
+                    continue
+                img_path = os.path.join(dataset_path, class_ ,i,'images', img)
+                img_path_list.append(img_path)
+                class_name = i #class_.split('.iam')[0].split('.ipt')[0]
+                # if '-' in class_name:
+                #     class_name = class_name.split('-')[1]
+                img_classes_list.append(translate_class2num[class_name])
 
     return img_path_list,img_classes_list
 def get_class2num(path):
@@ -36,12 +87,42 @@ def get_class2num(path):
         class2num: part class2num dict
     """
 
+    #model_list = os.listdir(path)
     model_list = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
 
     model_list.sort()
     class2num = {}
     for idx, item in enumerate(model_list):
-        class2num[item] = idx
+        class_name = item  # class_.split('.iam')[0].split('.ipt')[0]
+        # if '-' in class_name:
+        #     class_name = class_name.split('-')[1]
+        class2num[class_name] = idx
+    return class2num
+def get_class2num_mv(path):
+    """
+    get part class2num dict
+
+    Args:
+        path : dataset path
+
+    Returns:
+        class2num: part class2num dict
+    """
+
+    #model_list = os.listdir(path)
+    model_list = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+
+    model_list.sort()
+    class2num = {}
+    for i, item in enumerate(model_list):
+        second_list = [name for name in os.listdir(os.path.join(path,item)) if os.path.isdir(os.path.join(path,item, name))]
+        second_list.sort()
+        for idx, item in enumerate(second_list):
+            if idx == 3: break
+            class_name = item  # class_.split('.iam')[0].split('.ipt')[0]
+            # if '-' in class_name:
+            #     class_name = class_name.split('-')[1]
+            class2num[class_name] = idx
     return class2num
 def get_num2class(path):
     """
@@ -53,30 +134,60 @@ def get_num2class(path):
     Returns:
         class2num: part class2num dict
     """
+
+    #model_list = os.listdir(path)
     model_list = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
     model_list.sort()
     num2class = {}
     for idx, item in enumerate(model_list):
-        num2class[idx] = item
+        class_name = item  # class_.split('.iam')[0].split('.ipt')[0]
+        # if '-' in class_name:
+        #     class_name = class_name.split('-')[1]
+        num2class[idx] = class_name
     return num2class
-
-def build_loader(args,is_train_aug=False,add_hands=False):
+def build_data_list(args,):
     class2num = get_class2num(args.train_root)
     num_classes = len(class2num)
     print("[dataset] class number:", num_classes)
-    #split train valid data
+    # split train valid data
     print(args.train_root)
     original_img_path_list, original_img_classes_list = get_train_image_list(args.train_root, class2num)
     print(len(original_img_path_list))
-    x_train, x_valid, y_train, y_valid = train_test_split(original_img_path_list, original_img_classes_list,
-                                                          test_size=0.2,
-                                                          random_state=32, stratify=original_img_classes_list,
-                                                          shuffle=True)
+    if args.is_using_cross_validation:
+        pass
+        skf = StratifiedKFold(n_splits=3)
+    else:
+        x_train, x_valid, y_train, y_valid = train_test_split(original_img_path_list, original_img_classes_list,
+                                                              test_size=0.2,
+                                                              random_state=32, stratify=original_img_classes_list,)
+    return x_train, x_valid, y_train, y_valid
+def build_loader(args,is_train_aug=False,add_hands=False,fold_img_label=None):
+    if args.isgrayscale==True:
+        print('HERBS dataset is grayscale')
+    else:
+        print('HERBS dataset is RGB')
+    class2num = get_class2num(args.train_root)
+    num_classes = len(class2num)
+    original_img_path_list, original_img_classes_list = get_train_image_list(args.train_root, class2num)
+    if fold_img_label != None :
+        print("[dataset] class number:", num_classes)
+        # #split train valid data
+        # print(args.train_root)
+        print(len(original_img_path_list))
+        x_train, x_valid, y_train, y_valid = train_test_split(original_img_path_list, original_img_classes_list,
+                                                              test_size=0.2,
+                                                              random_state=32, stratify=original_img_classes_list,
+                                                              shuffle=True)
+    else:
+        x_train = [original_img_path_list[i] for i in fold_img_label[0]]
+        y_train = [original_img_classes_list[i] for i in fold_img_label[0]]
+        x_valid = [original_img_path_list[i] for i in fold_img_label[1]]
+        y_valid = [original_img_classes_list[i] for i in fold_img_label[1]]
 
 
     train_set, train_loader = None, None
-    if args.train_root is not None:
-        train_set = ImageDataset(istrain=True, img_list=x_train,label_list=y_train, data_size=args.data_size, return_index=True)
+    if x_train is not None:
+        train_set = ImageDataset(istrain=True, img_list=x_train,label_list=y_train, data_size=args.data_size, return_index=True,isgrayscale=args.isgrayscale)
         if is_train_aug:
             if add_hands:
                 # create hands dataset
@@ -88,26 +199,26 @@ def build_loader(args,is_train_aug=False,add_hands=False):
                 hands_img_path_list, hands_img_classes_list = get_train_image_list(os.path.join(args.combine_hands_path), class2num)
                 train_aug_set = ImageDataset(istrain=True, img_list=hands_img_path_list, label_list=hands_img_classes_list,
                                              data_size=args.data_size,
-                                             return_index=True, is_train_aug=is_train_aug)
+                                             return_index=True, is_train_aug=is_train_aug,isgrayscale=args.isgrayscale)
                 print(f'use hand data,{len(hands_img_path_list)}')
             else:
                 train_aug_set = ImageDataset(istrain=True, img_list=x_train, label_list=y_train, data_size=args.data_size,
-                                     return_index=True,is_train_aug=is_train_aug)
+                                     return_index=True,is_train_aug=is_train_aug,isgrayscale=args.isgrayscale)
             train_set = torch.utils.data.ConcatDataset([train_set, train_aug_set])
         train_loader = torch.utils.data.DataLoader(train_set, num_workers=args.num_workers, shuffle=True, batch_size=args.batch_size)
 
     val_set, val_loader = None, None
-    if args.val_root is not None:
-        val_set = ImageDataset(istrain=False, img_list=x_valid,label_list=y_valid, data_size=args.data_size, return_index=True)
+    if x_valid is not None:
+        val_set = ImageDataset(istrain=False, img_list=x_valid,label_list=y_valid, data_size=args.data_size, return_index=True,isgrayscale=args.isgrayscale)
         val_loader = torch.utils.data.DataLoader(val_set, num_workers=1, shuffle=True, batch_size=args.batch_size)
 
     return train_loader, val_loader
 
-def get_dataset(args):
-    if args.train_root is not None:
-        train_set = ImageDataset(istrain=True, img_list=args.train_root, data_size=args.data_size, return_index=True)
-        return train_set
-    return None
+# def get_dataset(args):
+#     if args.train_root is not None:
+#         train_set = ImageDataset(istrain=True, img_list=args.train_root, data_size=args.data_size, return_index=True)
+#         return train_set
+#     return None
 
 
 class ImageDataset(torch.utils.data.Dataset):
@@ -118,7 +229,8 @@ class ImageDataset(torch.utils.data.Dataset):
                  label_list,
                  data_size: int,
                  return_index: bool = False,
-                 is_train_aug=False):
+                 is_train_aug=False,
+                 isgrayscale=False):
         # notice that:
         # sub_data_size mean sub-image's width and height.
         """ basic information """
@@ -126,6 +238,7 @@ class ImageDataset(torch.utils.data.Dataset):
         self.label_list=label_list
         self.data_size = data_size
         self.return_index = return_index
+        self.isgrayscale=isgrayscale
 
         """ declare data augmentation """
         if is_train_aug:
@@ -189,9 +302,18 @@ class ImageDataset(torch.utils.data.Dataset):
         # get data information.
         image_path = self.data_infos[index]["path"]
         label = self.data_infos[index]["label"]
+        # =============================
         # read image by opencv.
-        img=cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), -1)
-        img = img[:, :, ::-1] # BGR to RGB.
+        img = cv2.imdecode(np.fromfile(image_path, dtype=np.uint8), -1)
+        # isgrayscale = False
+        if self.isgrayscale:
+
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            img = np.repeat(img[..., np.newaxis], 3, -1)
+        else:
+            # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = img[:, :, ::-1]  # BGR to RGB.
+
         img = self.transforms(image=img)['image']
         
         if self.return_index:

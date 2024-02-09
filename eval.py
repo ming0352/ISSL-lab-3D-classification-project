@@ -92,6 +92,82 @@ def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_s
     msg["train_loss/total_loss"] = total_loss
 
 
+def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, thresholds: dict,model):
+    """
+    only present top-1 training accuracy
+    """
+    model.eval()
+    total_loss = 0.0
+    with torch.no_grad():
+        """ accumulate """
+        for batch_id, (ids, datas, labels) in enumerate(test_loader):
+
+            datas, labels = datas.to(args.device), labels.to(args.device)
+
+            outs = model(datas)
+        if args.use_fpn:
+            for i in range(1, 5):
+                acc = top_k_corrects(outs["layer" + str(i)].mean(1), labels, tops=[1])["top-1"] / batch_size
+                acc = round(acc * 100, 2)
+                msg["val_acc/layer{}_acc".format(i)] = acc
+                loss = F.cross_entropy(outs["layer" + str(i)].mean(1), labels)
+                msg["val_loss/layer{}_loss".format(i)] = loss.item()
+                total_loss += loss.item()
+
+                gt_score_map = outs["layer" + str(i)]
+                thres = torch.Tensor(thresholds["layer" + str(i)])
+                gt_score_map = suppression(gt_score_map, thres)
+                logit = F.log_softmax(outs["FPN1_layer" + str(i)] / args.temperature, dim=-1)
+                loss_b0 = nn.KLDivLoss()(logit, gt_score_map)
+                msg["val_loss/layer{}_FPN1_loss".format(i)] = loss_b0.item()
+
+        if args.use_selection:
+            for name in outs:
+                if "select_" not in name:
+                    continue
+                B, S, _ = outs[name].size()
+                logit = outs[name].view(-1, args.num_classes)
+                labels_0 = labels.unsqueeze(1).repeat(1, S).flatten(0)
+                acc = top_k_corrects(logit, labels_0, tops=[1])["top-1"] / (B * S)
+                acc = round(acc * 100, 2)
+                msg["val_acc/{}_acc".format(name)] = acc
+                labels_0 = torch.zeros([B * S, args.num_classes]) - 1
+                labels_0 = labels_0.to(args.device)
+                loss = F.mse_loss(F.tanh(logit), labels_0)
+                msg["val_loss/{}_loss".format(name)] = loss.item()
+                total_loss += loss.item()
+
+            for name in outs:
+                if "drop_" not in name:
+                    continue
+                B, S, _ = outs[name].size()
+                logit = outs[name].view(-1, args.num_classes)
+                labels_1 = labels.unsqueeze(1).repeat(1, S).flatten(0)
+                acc = top_k_corrects(logit, labels_1, tops=[1])["top-1"] / (B * S)
+                acc = round(acc * 100, 2)
+                msg["val_acc/{}_acc".format(name)] = acc
+                loss = F.cross_entropy(logit, labels_1)
+                msg["val_loss/{}_loss".format(name)] = loss.item()
+                total_loss += loss.item()
+
+        if args.use_combiner:
+            acc = top_k_corrects(outs['comb_outs'], labels, tops=[1])["top-1"] / batch_size
+            acc = round(acc * 100, 2)
+            msg["val_acc/combiner_acc"] = acc
+            loss = F.cross_entropy(outs['comb_outs'], labels)
+            msg["val_loss/combiner_loss"] = loss.item()
+            total_loss += loss.item()
+
+        if "ori_out" in outs:
+            acc = top_k_corrects(outs["ori_out"], labels, tops=[1])["top-1"] / batch_size
+            acc = round(acc * 100, 2)
+            msg["val_acc/ori_acc"] = acc
+            loss = F.cross_entropy(outs["ori_out"], labels)
+            msg["val_loss/ori_loss"] = loss.item()
+            total_loss += loss.item()
+
+    msg["val_loss/total_loss"] = total_loss
+
 
 @torch.no_grad()
 def top_k_corrects(preds: torch.Tensor, labels: torch.Tensor, tops: list = [1, 3, 5]):
@@ -124,7 +200,7 @@ def _cal_evalute_metric(corrects: dict,
                         score_names: Union[list, None] = None):
     
     tmp_score = torch.softmax(logits, dim=-1)
-    tmp_corrects = top_k_corrects(tmp_score, labels, tops=[1]) # return top-1, top-3, top-5 accuracy  tops=[1, 3]#######
+    tmp_corrects = top_k_corrects(tmp_score, labels, tops=[1]) # return top-1, top-3, top-5 accuracy
     
     ### each layer's top-1, top-3 accuracy
     for name in tmp_corrects:
@@ -205,11 +281,12 @@ def evaluate(args, model, test_loader):
     total_batchs = len(test_loader) # just for log
     show_progress = [x/10 for x in range(11)] # just for log
     progress_i = 0
+    total_loss = 0.0
 
     with torch.no_grad():
         """ accumulate """
         for batch_id, (ids, datas, labels) in enumerate(test_loader):
-            
+
             score_names = []
             scores = []
             datas = datas.to(args.device)
@@ -223,7 +300,7 @@ def evaluate(args, model, test_loader):
 
                     this_name = "FPN1_layer" + str(i)
                     _cal_evalute_metric(corrects, total_samples, outs[this_name].mean(1), labels, this_name, scores, score_names)
-            
+
             ### for research
             if args.use_selection:
 
@@ -235,7 +312,7 @@ def evaluate(args, model, test_loader):
                     logit = outs[name].view(-1, args.num_classes)
                     labels_1 = labels.unsqueeze(1).repeat(1, S).flatten(0)
                     _cal_evalute_metric(corrects, total_samples, logit, labels_1, this_name)
-                
+
                 for name in outs:
                     if "drop_" not in name:
                         continue
@@ -252,18 +329,18 @@ def evaluate(args, model, test_loader):
             if "ori_out" in outs:
                 this_name = "original"
                 _cal_evalute_metric(corrects, total_samples, outs["ori_out"], labels, this_name)
-        
+
             _average_top_k_result(corrects, total_samples, scores, labels)
 
             eval_progress = (batch_id + 1) / total_batchs
-            
+
             if eval_progress > show_progress[progress_i]:
                 print(".."+str(int(show_progress[progress_i]*100))+"%", end='', flush=True)
                 progress_i += 1
 
         """ calculate accuracy """
         # total_samples = len(test_loader.dataset)
-        
+
         best_top1 = 0.0
         best_top1_name = ""
         eval_acces = {}
@@ -433,82 +510,6 @@ def plot_confusion_matrix(cm, label_names, save_name, title='Confusion Matrix ac
     plt.savefig(save_name, format='png')
     # plt.show()
 
-def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, thresholds: dict,model):
-    """
-    only present top-1 training accuracy
-    """
-    model.eval()
-    total_loss = 0.0
-    with torch.no_grad():
-        """ accumulate """
-        for batch_id, (ids, datas, labels) in enumerate(test_loader):
-
-            datas, labels = datas.to(args.device), labels.to(args.device)
-
-            outs = model(datas)
-        if args.use_fpn:
-            for i in range(1, 5):
-                acc = top_k_corrects(outs["layer" + str(i)].mean(1), labels, tops=[1])["top-1"] / batch_size
-                acc = round(acc * 100, 2)
-                msg["val_acc/layer{}_acc".format(i)] = acc
-                loss = F.cross_entropy(outs["layer" + str(i)].mean(1), labels)
-                msg["val_loss/layer{}_loss".format(i)] = loss.item()
-                total_loss += loss.item()
-
-                gt_score_map = outs["layer" + str(i)]
-                thres = torch.Tensor(thresholds["layer" + str(i)])
-                gt_score_map = suppression(gt_score_map, thres)
-                logit = F.log_softmax(outs["FPN1_layer" + str(i)] / args.temperature, dim=-1)
-                loss_b0 = nn.KLDivLoss()(logit, gt_score_map)
-                msg["val_loss/layer{}_FPN1_loss".format(i)] = loss_b0.item()
-
-        if args.use_selection:
-            for name in outs:
-                if "select_" not in name:
-                    continue
-                B, S, _ = outs[name].size()
-                logit = outs[name].view(-1, args.num_classes)
-                labels_0 = labels.unsqueeze(1).repeat(1, S).flatten(0)
-                acc = top_k_corrects(logit, labels_0, tops=[1])["top-1"] / (B * S)
-                acc = round(acc * 100, 2)
-                msg["val_acc/{}_acc".format(name)] = acc
-                labels_0 = torch.zeros([B * S, args.num_classes]) - 1
-                labels_0 = labels_0.to(args.device)
-                loss = F.mse_loss(F.tanh(logit), labels_0)
-                msg["val_loss/{}_loss".format(name)] = loss.item()
-                total_loss += loss.item()
-
-            for name in outs:
-                if "drop_" not in name:
-                    continue
-                B, S, _ = outs[name].size()
-                logit = outs[name].view(-1, args.num_classes)
-                labels_1 = labels.unsqueeze(1).repeat(1, S).flatten(0)
-                acc = top_k_corrects(logit, labels_1, tops=[1])["top-1"] / (B * S)
-                acc = round(acc * 100, 2)
-                msg["val_acc/{}_acc".format(name)] = acc
-                loss = F.cross_entropy(logit, labels_1)
-                msg["val_loss/{}_loss".format(name)] = loss.item()
-                total_loss += loss.item()
-
-        if args.use_combiner:
-            acc = top_k_corrects(outs['comb_outs'], labels, tops=[1])["top-1"] / batch_size
-            acc = round(acc * 100, 2)
-            msg["val_acc/combiner_acc"] = acc
-            loss = F.cross_entropy(outs['comb_outs'], labels)
-            msg["val_loss/combiner_loss"] = loss.item()
-            total_loss += loss.item()
-
-        if "ori_out" in outs:
-            acc = top_k_corrects(outs["ori_out"], labels, tops=[1])["top-1"] / batch_size
-            acc = round(acc * 100, 2)
-            msg["val_acc/ori_acc"] = acc
-            loss = F.cross_entropy(outs["ori_out"], labels)
-            msg["val_loss/ori_loss"] = loss.item()
-            total_loss += loss.item()
-
-    msg["val_loss/total_loss"] = total_loss
-
 def get_length_dict(path):
     '''
         parse  log file to get real max length dict
@@ -532,7 +533,7 @@ def get_length_dict(path):
                 class_name = lines[i].split()
                 if '.' not in class_name[-1]:
                     class_name.pop(-1)
-                class_name = class_name[-1].split('.iam')[0].split('.ipt')[0].split('-')[1]
+                class_name = class_name[-1].split('.iam')[0].split('.ipt')[0]#.split('-')[1]
                 if class_name not in length_dict.keys():
                     length_dict[class_name] = max_length
     return length_dict
@@ -542,18 +543,19 @@ def length_detection(length_dict, cf, preds, probs,num2class):
     back_pred = []
     front_prob = []
     back_prob = []
-    tolerance_scope = 0.006
-    taret_length = length_dict[cf]
+    ld_tolerance_scope = 0.01
+    target_length = length_dict[cf]
+    #holo_tolerance_scope = 0.01
 
     for i in range(0, len(preds[0])):
         P=length_dict[num2class[int(preds[0][i])]]
-        if tolerance_scope != 0:
-            np.random.seed(2)
-            cmp_value = np.random.choice(np.arange(-tolerance_scope, tolerance_scope, 0.0001)) + taret_length
+        if ld_tolerance_scope != 0:
+            rd_value=np.random.choice(np.arange(-ld_tolerance_scope, ld_tolerance_scope, 0.0001))
+            cmp_value = rd_value + target_length
         else:
-            cmp_value = taret_length
+            cmp_value = target_length
 
-        if abs(cmp_value - P) <= tolerance_scope:
+        if abs(cmp_value - P) <= ld_tolerance_scope:
             front_pred.append(int(preds[0][i]))
             front_prob.append(float(probs[0][i]))
         else:
@@ -565,8 +567,7 @@ def length_detection(length_dict, cf, preds, probs,num2class):
     new_prob = [*front_prob , *back_prob]
     new_probs = torch.unsqueeze(torch.tensor(new_prob).cuda(), dim=0)
 
-    return new_preds, new_probs
-
+    return new_preds, new_probs#,rd_value
 def choose_random_paths(files, paths, input_num):
     paths.sort()
     random.seed(2)
@@ -600,8 +601,8 @@ def count_total_pick_times(input_num,test_image_path,class2num,cls_folders):
     for ci, cf in enumerate(cls_folders):
         if input_num > 1:
             cf = cf.split('.iam')[0].split('.ipt')[0]
-            if '-' in cf:
-                cf = cf.split('-')[1]
+            # if '-' in cf:
+            #     cf = cf.split('-')[1]
             if ci not in num_dict:
                 num_dict[class2num[cf]]=0
             files = os.listdir(os.path.join(test_image_path, cf))

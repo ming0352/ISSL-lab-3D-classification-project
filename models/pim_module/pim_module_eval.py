@@ -421,7 +421,7 @@ class PluginMoodel(nn.Module):
         # else:
         #     self.backbone = backbone
         
-        model_name = "swin_large_patch4_window12_384_in22k"
+        model_name = 'swin_large_patch4_window12_384_in22k'#"swin_large_patch4_window12_384_in22k"
         self.backbone = timm.create_model(model_name, pretrained=isPretrained)
 
         ### get hidden feartues size

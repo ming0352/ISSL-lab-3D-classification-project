@@ -1,4 +1,4 @@
-import torch
+import torch,random
 import warnings
 torch.autograd.set_detect_anomaly(True)
 warnings.simplefilter("ignore")
@@ -13,30 +13,9 @@ from vis_utils import ImgLoader
 import seaborn as sn
 import pandas as pd
 from sklearn.metrics import confusion_matrix,classification_report
+from eval import get_length_dict,length_detection
 os.environ['TORCH_HOME']=os.path.join('pretrained_model')
-def get_length_dict(path):
-    length_dict={}
-    k=0
-    with open(path, encoding='utf8') as f:
-        lines = f.readlines()
-        for i in range(0, len(lines)):
-            if 'Start taking photo for' in lines[i]:
-                if ';' not in lines[i - 2]:
-                    k = 1
-                else:
-                    k = 0
-                max_length=float(lines[i-2-k].split()[-1].split(',')[0])
-                class_name=lines[i].split()
-                if '.' not in class_name[-1]:
-                    class_name.pop(-1)
-                class_name=class_name[-1].split('M11-')[-1].split('-')[0]
-                if '.' in class_name:
-                    class_name=class_name.split('.')[0]
-                if class_name in length_dict.keys():
-                    pass
-                else:
-                    length_dict[class_name]=max_length
-    return length_dict
+
 def build_model(pretrainewd_path: str,
                 img_size: int, 
                 fpn_size: int, 
@@ -63,7 +42,9 @@ def build_model(pretrainewd_path: str,
 
     if pretrainewd_path != "":
         ckpt = torch.load(pretrainewd_path)
-        model.load_state_dict(ckpt['model_state_dict'])
+        pretrained_dict = {k: v for k, v in ckpt['model_state_dict'].items() if
+                           k in model.state_dict() and 'head' not in k}#('patch' in k or 'layer' in k or 'norm' in k)}
+        model.load_state_dict(pretrained_dict,strict=False)
     
     model.eval()
 
@@ -117,28 +98,23 @@ def save_to_txt(test_acc,test_top5_acc,classification_report_save_path,y_true,y_
         f.write(f'model test acc: {test_acc:.3f}, test top5 acc: {test_top5_acc:.3f}\n')
         f.write(classification_report(y_true, y_pred, zero_division=0))
         f.write('\n')
-def get_class2num(path):
-    """
-    get part class2num dict
 
-    Args:
-        path : dataset path
 
-    Returns:
-        class2num: part class2num dict
-    """
 
-    model_list = os.listdir(path)
-    model_list.sort()
-    class2num = {}
-    for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
-        class2num[class_name] = idx
-    return class2num
+
 if __name__ == "__main__":
+    use_three_avg=False
+    use_length_detection=False
+    use_three_best=False
+
+
+
+    import time
+    start=time.time()
     # ===== 0. get setting =====
-    pretrained_root='C:/Users/user/Documents/FGVC-HERBS-master/records/FGVC-HERBS/M11_aug_90_50_retrain_10/'#os.path.join('records','FGVC-HERBS','M11-augmentation_90_n')
-    test_image_path='C:/Users/user/Documents/FGVC-HERBS-master/50_classes/test'#os.path.join('dataset','M11','test')
+    pretrained_root=os.path.join('records','FGVC-HERBS','M11-augmentation_90_50_r')#M11-augmentation_90_n
+    test_image_path= os.path.join('50_classes','test')
+    #os.path.join('88_classes','train_dataset','M11_real_test_image')
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
 
@@ -154,12 +130,16 @@ if __name__ == "__main__":
                              num_selects=pt_file['num_selects'])
 
     model.cuda()
-
-    cls_folders = [name for name in os.listdir(test_image_path) if os.path.isdir(os.path.join(test_image_path, name))]
+    print(f'load model time:{time.time()-start}')
+    cls_folders = [name for name in os.listdir(test_image_path) if os.path.isdir(os.path.join(test_image_path, name))]#os.listdir(test_image_path)
     cls_folders.sort()
     top1, top3, top5, top7 = 0, 0, 0, 0
     total = 0
     n_samples = 0
+    length_top_5_num_correct=0
+    length_top_7_num_correct=0
+    length_top_1_num_correct=0
+    length_top_3_num_correct=0
 
     for ci, cf in enumerate(cls_folders):
         n_samples += len(os.listdir(os.path.join(test_image_path,cf)))
@@ -168,45 +148,95 @@ if __name__ == "__main__":
     gt_list=[]
     pred_list=[]
     top1_dic,top3_dic,top5_dic,top7_dic={},{},{},{}
+
+
+    if use_length_detection:
+        length_dict =pt_file['real_length_dict']
+
     class2num = pt_file['class2num']
     num2class=dict((value,key) for key,value in class2num.items())
-    update_n=0
+
     for ci, cf in enumerate(cls_folders):
+        class_name = cf.split('.iam')[0].split('.ipt')[0]
+        if '-' in class_name:
+            class_name = class_name.split('-')[1]
+        #init dict
+        if class2num[class_name] not in top1_dic:
+            top1_dic[class2num[class_name]]=0
+        if class2num[class_name] not in top5_dic:
+            top5_dic[class2num[class_name]]=0
+        if class2num[class_name] not in top3_dic:
+            top3_dic[class2num[class_name]]=0
+        if class2num[class_name] not in top7_dic:
+            top7_dic[class2num[class_name]]=0
         files = os.listdir(os.path.join(test_image_path , cf))
-        files.sort()
+        imgs = []
+        img_paths = []
+        update_n = 0
         for fi, f in enumerate(files):
-            img_path = os.path.join(test_image_path , cf,f)
+            tmp=time.time()
+            img_path = os.path.join(test_image_path , cf , f)
+            img_paths.append(img_path)
             img_loader = ImgLoader(img_size=pt_file['img_size'])
             img, ori_img = img_loader.load(img_path)
-            img = img.unsqueeze(0).cuda() # add batch size dimension
-            update_n += 1
+            imgs = img.unsqueeze(0).cuda()
 
             with torch.no_grad():
-                img = img.cuda()
-                outs = model(img)
+                tmp=time.time()
+                imgs = imgs.cuda()
+                outs = model(imgs)
                 sum_outs = sum_all_out(outs, sum_type="softmax") # softmax
-                preds = torch.sort(sum_outs, dim=-1, descending=True)[1]
+                probs,preds = torch.sort(sum_outs, dim=-1, descending=True)
 
-                if class2num[cf] in preds [0][:1]:
+                update_n += 1
+                if use_length_detection:
+                    new_preds,new_probs = length_detection(length_dict, class_name, preds, probs,num2class)########
+
+                    #calculate length detection top1,top5
+                    if class2num[class_name] in new_preds[0][:1]:
+                        length_top_1_num_correct+=1
+                        top1_dic[class2num[class_name]] += 1
+                    if class2num[class_name] in new_preds[0][:3]:
+                        length_top_3_num_correct+=1
+                        top3_dic[class2num[class_name]] += 1
+                    if class2num[class_name] in new_preds[0][:5]:
+                        length_top_5_num_correct+=1
+                        top5_dic[class2num[class_name]] += 1
+                    if class2num[class_name] in new_preds[0][:7]:
+                        length_top_7_num_correct+=1
+                        top7_dic[class2num[class_name]] += 1
+
+                if class2num[class_name] in preds[0][:1]:
                     top1 += 1
-                if class2num[cf] in preds [0][:3]:
+                if class2num[class_name] in preds[0][:3]:
                     top3 += 1
-                if class2num[cf] in preds [0][:5]:
+                if class2num[class_name] in preds[0][:5]:
                     top5 += 1
-                if class2num[cf] in preds [0][:7]:
+                if class2num[class_name] in preds[0][:7]:
                     top7 += 1
-                total += update_n
 
-            top1_acc = round(top1 / total * 100, 3)
-            top3_acc = round(top3 / total * 100, 3)
-            top5_acc = round(top5 / total * 100, 3)
-            top7_acc = round(top7 / total * 100, 3)
+        total += update_n
 
+        imgs = []
+        img_paths = []
+        top1_acc = round(top1 / total * 100, 3)
+        top3_acc = round(top3 / total * 100, 3)
+        top5_acc = round(top5 / total * 100, 3)
+        top7_acc = round(top7 / total * 100, 3)
+        ld_top1_acc = round(length_top_1_num_correct / total * 100, 3)
+        ld_top3_acc = round(length_top_3_num_correct / total * 100, 3)
+        ld_top5_acc = round(length_top_5_num_correct / total * 100, 3)
+        ld_top7_acc = round(length_top_7_num_correct / total * 100, 3)
 
-            msg = "top1: {}%, top3: {}%, top5: {}%,, top7: {}%".format(top1_acc, top3_acc, top5_acc,top7_acc)
-            pbar.set_description(msg)
-            pbar.update(update_n)
-            update_n = 0
+        msg = f"top1: {top1_acc}%, top3: {top3_acc}%, top5: {top5_acc}%,, top7: {top7_acc}% "# ld  top1: {ld_top1_acc}%, top3: {ld_top3_acc}%, top5: {ld_top5_acc}%,, top7: {ld_top7_acc}%"
+        pbar.set_description(msg)
+        pbar.update(update_n)
+        update_n = 0
     pbar.close()
+    print(f'avg inference time:{(time.time() - start)/total}')
+
+if use_length_detection:
+    print(f'top1 length detection:{ld_top1_acc} %,top5 length detection:{ld_top5_acc} %,top7 length detection:{ld_top7_acc} %')
+
 
 

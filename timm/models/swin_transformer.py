@@ -449,7 +449,7 @@ class SwinTransformer(nn.Module):
                  window_size=7, mlp_ratio=4., qkv_bias=True,
                  drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
                  norm_layer=nn.LayerNorm, ape=False, patch_norm=True,
-                 use_checkpoint=False, weight_init='', **kwargs):
+                 use_checkpoint=False, weight_init='',out_feature=True,ssl=False, **kwargs):
         super().__init__()
 
         self.num_classes = num_classes
@@ -459,7 +459,8 @@ class SwinTransformer(nn.Module):
         self.patch_norm = patch_norm
         self.num_features = int(embed_dim * 2 ** (self.num_layers - 1))
         self.mlp_ratio = mlp_ratio
-
+        self.out_feature=out_feature
+        self.ssl=ssl
         # split image into non-overlapping patches
         self.patch_embed = PatchEmbed(
             img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim,
@@ -502,6 +503,11 @@ class SwinTransformer(nn.Module):
         self.norm = norm_layer(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
+        self.out_features_dim=221184
+        if self.ssl:
+            self.classifier = nn.Identity()#nn.Linear(self.out_features_dim, num_classes)
+            self.rot_classifier = nn.Identity()#nn.Linear(self.num_classes, 4)
+
 
         assert weight_init in ('jax', 'jax_nlhb', 'nlhb', '')
         head_bias = -math.log(self.num_classes) if 'nlhb' in weight_init else 0.
@@ -526,23 +532,44 @@ class SwinTransformer(nn.Module):
         self.num_classes = num_classes
         self.head = nn.Linear(self.num_features, num_classes) if num_classes > 0 else nn.Identity()
 
-    def forward_features(self, x):
-        x = self.patch_embed(x)
-        if self.absolute_pos_embed is not None:
-            x = x + self.absolute_pos_embed
-        x = self.pos_drop(x)
-        l1 = self.layers[0](x)
-        l2 = self.layers[1](l1)
-        l3 = self.layers[2](l2)
-        l4 = self.layers[3](l3)
-        # x = self.norm(l4)  # B L C
-        # x = self.avgpool(x.transpose(1, 2))  # B C 1
-        # x = torch.flatten(x, 1)
-        return {"layer1":l1, "layer2":l2, "layer3":l3, "layer4":l4}
+    def forward_head(self, x, pre_logits: bool = False):
+        return self.head(x, pre_logits=True) if pre_logits else self.head(x)
 
-    def forward(self, x):
-        x = self.forward_features(x)
-        # x = self.head(x)
+    def forward_features(self, x,rot=False):
+        if self.out_feature:
+            x = self.patch_embed(x)
+            if self.absolute_pos_embed is not None:
+                x = x + self.absolute_pos_embed
+            x = self.pos_drop(x)
+            l1 = self.layers[0](x)
+            l2 = self.layers[1](l1)
+            l3 = self.layers[2](l2)
+            l4 = self.layers[3](l3)
+            # x = self.norm(l4)  # B L C
+            # x = self.avgpool(x.transpose(1, 2))  # B C 1
+            # x = torch.flatten(x, 1)
+            return {"layer1":l1, "layer2":l2, "layer3":l3, "layer4":l4}
+        else:
+            x = self.patch_embed(x)
+            x = self.layers(x)
+            x = self.norm(x)
+            if self.ssl:
+                x = x.view(x.size(0), -1)
+                self.out_features_dim=x.size(-1)
+                feat = x  # last layer feature
+
+                xx = self.classifier(x)
+                if (rot):
+                    #             xy1 = self.rot_classifier1(xx)
+                    #             xy2 = self.rot_classifier2(xy1)
+                    xy = self.rot_classifier(xx)
+                    return feat, (xx, xy)
+            return x
+
+    def forward(self, x, rot=False):
+        x = self.forward_features(x,rot)
+        # if not self.out_feature:
+        #     x = self.head(x)
         return x
 
 

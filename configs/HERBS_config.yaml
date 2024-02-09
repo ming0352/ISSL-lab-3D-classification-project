@@ -1,19 +1,19 @@
 project_name: FGVC-HERBS
 notes: 'no inverse'
-exp_name: 50_ssl
+exp_name: ssl(MVImgNet)_grayscale 
 use_wandb: True
-wandb_entity: ~
-train_root: C:\Users\user\Documents\FGVC-HERBS-master\50_classes\train #./dataset/M11/train/90/
+wandb_entity: -
+train_root: ./dataset/50_classes/train/
 val_root: ./CUB200-2011/test/
 data_size: 384
 num_workers: 2
 batch_size: 8
-backbone_model_name: swin-t
+backbone_model_name: swin-l
 pretrained: ~
 optimizer: SGD
 max_lr: 0.0005
 wdecay: 0.0003
-max_epochs: 100
+max_epochs: 50
 warmup_batchs: 1500
 use_amp: True
 use_fpn: True
@@ -37,3 +37,13 @@ temperature: 64
 add_hands: False
 is_train_aug : True
 combine_hands_path : ./combine_hands/
+isgrayscale: False
+which_gpu: cuda:0
+#ssl
+use_ssl_pretrained_backbone: True
+ssl_pretrained_model_name: MVImgNet 70_RGB #MVImgNet_gray_test_0202
+
+
+## cross validation
+is_using_cross_validation: True
+cross_validation_folds: 3

@@ -1,10 +1,19 @@
 # 3D model classification project
+##
+### Code created for master thesis project
+##
 # 1. Environment setting
-## 1.1 Requirement
-The project enviroment has createded by Anaconda,and you can create enviroment use requirements.txt.
+## 1.1 Environment
+#### The project enviroment has createded by Anaconda,and you can create enviroment use environment.yaml.
+#### To speed up the create process,I recommand to use mamba to create enviroment.
+#### you can follow bellow command to create env.
 ```
-conda install --file requirements.yml
-``` 
+# go to base env and install memba
+conda install -n base -c conda-forge mamba
+
+mamba env create --file environment.yaml
+
+```
 
 ## 1.2 Dataset
 We use 3d model images as oue dataset,and 
@@ -23,7 +32,7 @@ Training setting is in ./configs/config.yaml, you can change any setting if you 
 If you want to use hands dataset, you can edit config.yaml file with following setting.
  
 ```
-#config.yaml
+#configs\HERBS_config.yaml
 
 add_hands: True
 is_train_aug : True
@@ -31,13 +40,15 @@ combine_hands_path : ./combine_hands/
 ```
 
 ## 2.3 Wandb
-If you want to record training information, you can edit ./configs/config.yaml file by setting your wandb username
+If you want to record training information, you can edit yaml file by setting your wandb username
  
 ```
-#config.yaml
+#configs\HERBS_config.yaml
+#configs\ssl_config.yaml
 use_wandb: True
 wandb_entity: <your wandb username>
 ```
+
 
 ## 2.4 Save Model
 The model will save in ./records folder

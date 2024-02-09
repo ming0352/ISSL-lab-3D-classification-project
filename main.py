@@ -16,7 +16,8 @@ from data.dataset import get_class2num
 from eval import get_length_dict
 warnings.simplefilter("ignore")
 os.environ['TORCH_HOME']=os.path.join('pretrained_model')
-
+from train_ssl import run_ssl
+from sklearn.model_selection import KFold, StratifiedKFold
 
 def eval_freq_schedule(args, epoch: int):
     if epoch >= args.max_epochs * 0.95:
@@ -26,16 +27,16 @@ def eval_freq_schedule(args, epoch: int):
     elif epoch >= args.max_epochs * 0.8:
         args.eval_freq = 2
 
-def set_environment(args, tlogger,is_train_aug=False,add_hands=False):
+def set_environment(args, tlogger,is_train_aug=False,add_hands=False,idx_fold=-1):
     
     print("Setting Environment...")
 
-    args.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    args.device = torch.device(args.which_gpu if torch.cuda.is_available() else "cpu")
     
     ### = = = =  Dataset and Data Loader = = = =  
     tlogger.print("Building Dataloader....")
     
-    train_loader, val_loader = build_loader(args,is_train_aug,add_hands)
+    train_loader, val_loader = build_loader(args,is_train_aug,add_hands,idx_fold)
     
     if train_loader is None and val_loader is None:
         raise ValueError("Find nothing to train or evaluate.")
@@ -250,13 +251,13 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
             progress_i += 1
 
 
-def main(args, tlogger):
+def main(args, tlogger,fold_img_label,idx_fold=''):
     """
     save model last.pt and best.pt
     """
     is_train_aug=args.is_train_aug
     add_hands=args.add_hands
-    train_loader, val_loader, model, optimizer, schedule, scaler, amp_context, start_epoch = set_environment(args, tlogger,is_train_aug,add_hands)
+    train_loader, val_loader, model, optimizer, schedule, scaler, amp_context, start_epoch = set_environment(args, tlogger,is_train_aug,add_hands,fold_img_label)
     args.model_type='HERBS'
     best_acc = 0.0
     best_eval_name = "null"
@@ -264,6 +265,7 @@ def main(args, tlogger):
         length_dict= get_length_dict(os.path.join(args.train_root,'log.txt'))
     except:
         length_dict=None
+
     if args.use_wandb:
         wandb.init(entity=args.wandb_entity,
                    project=args.project_name,
@@ -349,24 +351,52 @@ def main(args, tlogger):
                 wandb.run.summary["best_acc"] = best_acc
                 wandb.run.summary["best_eval_name"] = best_eval_name
                 wandb.run.summary["best_epoch"] = epoch + 1
-
+    if args.use_wandb:
+        wandb.finish()
 
 if __name__ == "__main__":
-    start_time=time.time()
+    start_time = time.time()
     tlogger = timeLogger()
-
+    ssl_config_path = "./configs/ssl_config.yaml"
     tlogger.print("Reading Config...")
-    args = get_args()
-    assert args.c != "", "Please provide config file (.yaml)"
-    load_yaml(args, args.c)
-    build_record_folder(args)
+    HERBS_args = get_args()
+    ssl_args = get_args(config_path=ssl_config_path)
+    assert HERBS_args.c != "", "Please provide config file (.yaml)"
+    load_yaml(HERBS_args, HERBS_args.c)
+    load_yaml(ssl_args, ssl_args.c)
     tlogger.print()
+    if ssl_args.isTrainSSL:
+        print('start train ssl model...')
+        run_ssl(ssl_args, tlogger)
+    loop_times=1
+    if HERBS_args.is_using_cross_validation:
+        skf=StratifiedKFold(n_splits=3, random_state=32, shuffle=True)
+        from data.dataset import get_train_image_list
+        class2num = get_class2num(HERBS_args.train_root)
+        num_classes = len(class2num)
+        print("[dataset] class number:", num_classes)
+        original_img_path_list, original_img_classes_list = get_train_image_list(HERBS_args.train_root, class2num)
+        for i, (train_index, valid_index) in enumerate(skf.split(original_img_path_list, original_img_classes_list)):
+            # if i==0: continue
+            print(f"Fold {i}:")
+            # print(f"  Train: index={train_index}")
+            # print(f"  valid:  index={valid_index}")
 
-    main(args, tlogger)
-    end_time=time.time()-start_time
-    print(f'train time:{end_time}')
-    with open(os.path.join(args.save_dir,'log.txt'), 'a') as f:
-
-        f.write(f'{args.model_type} model \n')
-        f.write(f'train time:{end_time}')
-        f.write('\n')
+            HERBS_args.exp_name=HERBS_args.exp_name.split('_fold_')[0]+'_fold_'+str(i)
+            build_record_folder(HERBS_args)
+            main(HERBS_args, tlogger,(train_index,valid_index),str(i))
+            end_time = time.time() - start_time
+            print(f'train time:{end_time}')
+            # with open(os.path.join(HERBS_args.save_dir, 'log.txt'), 'a') as f:
+            #     f.write(f'{HERBS_args.exp_name} model fold {i} \n')
+            #     f.write(f'train time:{end_time}')
+            #     f.write('\n')
+    else:
+        build_record_folder(HERBS_args)
+        main(HERBS_args, tlogger)
+        end_time = time.time() - start_time
+        print(f'train time:{end_time}')
+        with open(os.path.join(HERBS_args.save_dir, 'log.txt'), 'a') as f:
+            f.write(f'{HERBS_args.exp_name} model \n')
+            f.write(f'train time:{end_time}')
+            f.write('\n')
