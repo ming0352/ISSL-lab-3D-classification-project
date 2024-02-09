@@ -1,0 +1,13 @@
+combine_hands/*
+pretrained_model/*
+dataset/*
+record/*
+__pycache__/
+data/__pycache__/__init__.cpython-38.pyc
+data/__pycache__/__init__.cpython-311.pyc
+data/__pycache__/dataset.cpython-38.pyc
+data/__pycache__/dataset.cpython-311.pyc
+data/__pycache__/randaug.cpython-38.pyc
+data/__pycache__/randaug.cpython-311.pyc
+records/FGVC-HERBS/M11-augmentation_90_n/config.yaml
+records/FGVC-HERBS/M11-augmentation_90_n/save_model/best.pth
