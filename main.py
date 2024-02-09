@@ -4,17 +4,18 @@ import torch.nn.functional as F
 import contextlib
 import wandb
 import warnings
-import copy,time
+import time
 
 from models.builder import MODEL_GETTER
 from data.dataset import build_loader
 from utils.costom_logger import timeLogger
 from utils.config_utils import load_yaml, build_record_folder, get_args
 from utils.lr_schedule import cosine_decay, adjust_lr, get_lr
-from eval import evaluate, cal_train_metrics, suppression
+from eval import evaluate, cal_train_metrics, suppression, cal_evalute_metrics
 from data.dataset import get_class2num
+from eval import get_length_dict
 warnings.simplefilter("ignore")
-
+os.environ['TORCH_HOME']=os.path.join('pretrained_model')
 
 
 def eval_freq_schedule(args, epoch: int):
@@ -259,7 +260,10 @@ def main(args, tlogger):
     args.model_type='HERBS'
     best_acc = 0.0
     best_eval_name = "null"
-
+    try:
+        length_dict= get_length_dict(os.path.join(args.train_root,'log.txt'))
+    except:
+        length_dict=None
     if args.use_wandb:
         wandb.init(entity=args.wandb_entity,
                    project=args.project_name,
@@ -299,6 +303,7 @@ def main(args, tlogger):
             "epoch": epoch,
             'img_size': args.data_size,
             'class2num': get_class2num(args.train_root),
+            'real_length_dict': length_dict,
         }
         torch.save(checkpoint, os.path.join(args.save_dir, "save_model", "last.pth"))
 
@@ -314,7 +319,12 @@ def main(args, tlogger):
                 tlogger.print()
 
             if args.use_wandb:
-                wandb.log(accs)
+                msg = {}
+                msg['info/epoch'] = epoch + 1
+                msg['info/lr'] = get_lr(optimizer)
+                cal_evalute_metrics(args, msg, val_loader, args.batch_size, model.selector.thresholds, model)
+                msg["val_acc/acc"] = acc
+                wandb.log(msg)
 
             if acc > best_acc:
                 best_acc = acc
@@ -332,6 +342,7 @@ def main(args, tlogger):
                     "epoch": epoch,
                     'img_size': args.data_size,
                     'class2num': get_class2num(args.train_root),
+                    'real_length_dict': length_dict,
                 }
                 torch.save(save_dict, os.path.join(args.save_dir, "save_model", "best.pth"))
             if args.use_wandb:

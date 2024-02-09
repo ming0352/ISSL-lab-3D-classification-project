@@ -1,4 +1,4 @@
-import torch,random
+import torch
 import warnings
 torch.autograd.set_detect_anomaly(True)
 warnings.simplefilter("ignore")
@@ -155,7 +155,7 @@ if __name__ == "__main__":
 
     model.cuda()
 
-    cls_folders = os.listdir(test_image_path)
+    cls_folders = [name for name in os.listdir(test_image_path) if os.path.isdir(os.path.join(test_image_path, name))]
     cls_folders.sort()
     top1, top3, top5, top7 = 0, 0, 0, 0
     total = 0

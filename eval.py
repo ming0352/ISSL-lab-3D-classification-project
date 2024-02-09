@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Union
 import pandas as pd
-import os
+import os,random
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 
@@ -432,3 +432,185 @@ def plot_confusion_matrix(cm, label_names, save_name, title='Confusion Matrix ac
     # show confusion matrix
     plt.savefig(save_name, format='png')
     # plt.show()
+
+def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, thresholds: dict,model):
+    """
+    only present top-1 training accuracy
+    """
+    model.eval()
+    total_loss = 0.0
+    with torch.no_grad():
+        """ accumulate """
+        for batch_id, (ids, datas, labels) in enumerate(test_loader):
+
+            datas, labels = datas.to(args.device), labels.to(args.device)
+
+            outs = model(datas)
+        if args.use_fpn:
+            for i in range(1, 5):
+                acc = top_k_corrects(outs["layer" + str(i)].mean(1), labels, tops=[1])["top-1"] / batch_size
+                acc = round(acc * 100, 2)
+                msg["val_acc/layer{}_acc".format(i)] = acc
+                loss = F.cross_entropy(outs["layer" + str(i)].mean(1), labels)
+                msg["val_loss/layer{}_loss".format(i)] = loss.item()
+                total_loss += loss.item()
+
+                gt_score_map = outs["layer" + str(i)]
+                thres = torch.Tensor(thresholds["layer" + str(i)])
+                gt_score_map = suppression(gt_score_map, thres)
+                logit = F.log_softmax(outs["FPN1_layer" + str(i)] / args.temperature, dim=-1)
+                loss_b0 = nn.KLDivLoss()(logit, gt_score_map)
+                msg["val_loss/layer{}_FPN1_loss".format(i)] = loss_b0.item()
+
+        if args.use_selection:
+            for name in outs:
+                if "select_" not in name:
+                    continue
+                B, S, _ = outs[name].size()
+                logit = outs[name].view(-1, args.num_classes)
+                labels_0 = labels.unsqueeze(1).repeat(1, S).flatten(0)
+                acc = top_k_corrects(logit, labels_0, tops=[1])["top-1"] / (B * S)
+                acc = round(acc * 100, 2)
+                msg["val_acc/{}_acc".format(name)] = acc
+                labels_0 = torch.zeros([B * S, args.num_classes]) - 1
+                labels_0 = labels_0.to(args.device)
+                loss = F.mse_loss(F.tanh(logit), labels_0)
+                msg["val_loss/{}_loss".format(name)] = loss.item()
+                total_loss += loss.item()
+
+            for name in outs:
+                if "drop_" not in name:
+                    continue
+                B, S, _ = outs[name].size()
+                logit = outs[name].view(-1, args.num_classes)
+                labels_1 = labels.unsqueeze(1).repeat(1, S).flatten(0)
+                acc = top_k_corrects(logit, labels_1, tops=[1])["top-1"] / (B * S)
+                acc = round(acc * 100, 2)
+                msg["val_acc/{}_acc".format(name)] = acc
+                loss = F.cross_entropy(logit, labels_1)
+                msg["val_loss/{}_loss".format(name)] = loss.item()
+                total_loss += loss.item()
+
+        if args.use_combiner:
+            acc = top_k_corrects(outs['comb_outs'], labels, tops=[1])["top-1"] / batch_size
+            acc = round(acc * 100, 2)
+            msg["val_acc/combiner_acc"] = acc
+            loss = F.cross_entropy(outs['comb_outs'], labels)
+            msg["val_loss/combiner_loss"] = loss.item()
+            total_loss += loss.item()
+
+        if "ori_out" in outs:
+            acc = top_k_corrects(outs["ori_out"], labels, tops=[1])["top-1"] / batch_size
+            acc = round(acc * 100, 2)
+            msg["val_acc/ori_acc"] = acc
+            loss = F.cross_entropy(outs["ori_out"], labels)
+            msg["val_loss/ori_loss"] = loss.item()
+            total_loss += loss.item()
+
+    msg["val_loss/total_loss"] = total_loss
+
+def get_length_dict(path):
+    '''
+        parse  log file to get real max length dict
+        Args:
+            path: log file path
+
+        Returns: length_dict
+
+        '''
+    length_dict = {}
+    k = 0
+    with open(path, encoding='utf8') as f:
+        lines = f.readlines()
+        for i in range(0, len(lines)):
+            if 'Start taking photo for' in lines[i]:
+                if ';' not in lines[i - 2]:
+                    k = 1
+                else:
+                    k = 0
+                max_length = float(lines[i - 2 - k].split()[-1].split(',')[0])
+                class_name = lines[i].split()
+                if '.' not in class_name[-1]:
+                    class_name.pop(-1)
+                class_name = class_name[-1].split('.iam')[0].split('.ipt')[0].split('-')[1]
+                if class_name not in length_dict.keys():
+                    length_dict[class_name] = max_length
+    return length_dict
+
+def length_detection(length_dict, cf, preds, probs,num2class):
+    front_pred = []
+    back_pred = []
+    front_prob = []
+    back_prob = []
+    tolerance_scope = 0.006
+    taret_length = length_dict[cf]
+
+    for i in range(0, len(preds[0])):
+        P=length_dict[num2class[int(preds[0][i])]]
+        if tolerance_scope != 0:
+            np.random.seed(2)
+            cmp_value = np.random.choice(np.arange(-tolerance_scope, tolerance_scope, 0.0001)) + taret_length
+        else:
+            cmp_value = taret_length
+
+        if abs(cmp_value - P) <= tolerance_scope:
+            front_pred.append(int(preds[0][i]))
+            front_prob.append(float(probs[0][i]))
+        else:
+            back_pred.append(int(preds[0][i]))
+            back_prob.append(float(probs[0][i]))
+
+    new_pred = [*front_pred , *back_pred]
+    new_preds = torch.unsqueeze(torch.tensor(new_pred).cuda(), dim=0)
+    new_prob = [*front_prob , *back_prob]
+    new_probs = torch.unsqueeze(torch.tensor(new_prob).cuda(), dim=0)
+
+    return new_preds, new_probs
+
+def choose_random_paths(files, paths, input_num):
+    paths.sort()
+    random.seed(2)
+    if len(paths) > input_num:
+        return random.sample(paths, input_num)
+    else:
+        other_path = [item for item in files if item not in paths]
+        other_path.sort()
+        return random.sample(other_path, input_num - len(paths)) + paths
+
+def avg_result(tmp_probs_list,tmp_preds_list):
+    t = {}
+    for i, pred_tensor in enumerate(tmp_preds_list):
+        for j, g in enumerate(pred_tensor):
+            if int(g) not in t.keys():
+                t[int(g)] = 0
+            t[int(g)] = torch.add(t[int(g)], tmp_probs_list[i][j])
+    t = {key: value / len(tmp_preds_list) for key, value in t.items()}
+
+    sorted_pairs = sorted(zip(list(t.values()), list(t.keys())), reverse=True)
+    prob, pred = zip(*sorted_pairs)
+
+    preds = torch.unsqueeze(torch.tensor(pred).cuda(), dim=0)
+    probs = torch.unsqueeze(torch.tensor(prob).cuda(), dim=0)
+    return preds, probs
+
+
+def count_total_pick_times(input_num,test_image_path,class2num,cls_folders):
+    n_samples=0
+    num_dict = {}
+    for ci, cf in enumerate(cls_folders):
+        if input_num > 1:
+            cf = cf.split('.iam')[0].split('.ipt')[0]
+            if '-' in cf:
+                cf = cf.split('-')[1]
+            if ci not in num_dict:
+                num_dict[class2num[cf]]=0
+            files = os.listdir(os.path.join(test_image_path, cf))
+            files.sort()
+            pick_times = len(files) // input_num
+            if len(files) % input_num != 0:
+                pick_times += 1
+            n_samples += pick_times
+            num_dict[class2num[cf]]=pick_times
+        else:
+            n_samples += len(os.listdir(os.path.join(test_image_path, cf)))
+    return n_samples

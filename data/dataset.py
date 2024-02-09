@@ -1,13 +1,9 @@
 import os,random
 import numpy as np
 import cv2
-import torchvision.transforms as transforms
-from PIL import Image
-import copy
 import torch
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-from .randaug import RandAugment
+
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from utils.combine_bg import combine_hands
@@ -16,7 +12,7 @@ def get_train_image_list(dataset_path,translate_class2num):
     img_path_list = []
     img_classes_list = []
     skiped_list = []
-    classes = translate_class2num.keys()
+    classes=[name for name in os.listdir(dataset_path) if os.path.isdir(os.path.join(dataset_path, name))]
     for class_ in classes:
         if not os.path.isdir(os.path.join(dataset_path ,class_)):
             continue
@@ -26,7 +22,10 @@ def get_train_image_list(dataset_path,translate_class2num):
                 continue
             img_path = os.path.join(dataset_path, class_ , img)
             img_path_list.append(img_path)
-            img_classes_list.append(translate_class2num[class_])
+            class_name = class_.split('.iam')[0].split('.ipt')[0]
+            if '-' in class_name:
+                class_name = class_name.split('-')[1]
+            img_classes_list.append(translate_class2num[class_name])
 
     return img_path_list,img_classes_list
 def get_class2num(path):
@@ -40,11 +39,14 @@ def get_class2num(path):
         class2num: part class2num dict
     """
 
-    model_list = os.listdir(path)
+    model_list = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
+
     model_list.sort()
     class2num = {}
     for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
+        class_name = item.split('.iam')[0].split('.ipt')[0].split('-A')[0]
+        if '-' in class_name:
+            class_name=class_name.split('-')[1]
         class2num[class_name] = idx
     return class2num
 def get_num2class(path):
@@ -57,12 +59,13 @@ def get_num2class(path):
     Returns:
         class2num: part class2num dict
     """
-
-    model_list = os.listdir(path)
+    model_list = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
     model_list.sort()
     num2class = {}
     for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
+        class_name = item.split('.iam')[0].split('.ipt')[0].split('-A')[0]  # .split('-')[1]
+        if '-' in class_name:
+            class_name = class_name.split('-')[1]
         num2class[idx] = class_name
     return num2class
 
@@ -138,7 +141,7 @@ class ImageDataset(torch.utils.data.Dataset):
             self.transforms=A.Compose(
             [
                 A.Resize(data_size, data_size),
-                A.ShiftScaleRotate(shift_limit=0.2, scale_limit=0.3, rotate_limit=45,border_mode=cv2.BORDER_CONSTANT,value=0,p=0.5), #(-0.7,-0.3)
+                A.ShiftScaleRotate(shift_limit=0.2, scale_limit=(-0.7,-0.3), rotate_limit=45,border_mode=cv2.BORDER_CONSTANT,value=0,p=0.5),
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
                 A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2,p=0.5),

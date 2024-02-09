@@ -1,6 +1,6 @@
 project_name: FGVC-HERBS
 notes: 'no inverse'
-exp_name: test
+exp_name: hand_bgg
 use_wandb: True
 wandb_entity: ~
 train_root: ./dataset/M11/train/90/
@@ -34,6 +34,6 @@ update_freq: 4
 log_freq: 1
 eval_freq:  1
 temperature: 64
-add_hands: True
+add_hands: False
 is_train_aug : True
 combine_hands_path : ./combine_hands/

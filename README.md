@@ -1,9 +1,9 @@
-# ISSL-lab-3D-classification-project
+# 3D model classification project
 # 1. Environment setting
 ## 1.1 Requirement
 The project enviroment has createded by Anaconda,and you can create enviroment use requirements.txt.
 ```
-conda install --file requirements.txt
+conda install --file requirements.yml
 ``` 
 
 ## 1.2 Dataset
@@ -45,7 +45,13 @@ The model will save in ./records folder
 
 # 3. Test
 
-If you want to test model, you can just run run_evaluation.py, remember to change test model path and test data folder
+If you want to test model , you can just run multiple_image_run_evaluation.py
+
+ ### 3.1 Change infer images numbers
+You can choose how many image you  want to infer once by setting input_num .Now support one or three images.
+
+ ### 3.2 save result
+ You can enable <is_save_summary> to save test result.
 
 # 4. Visualize result
 

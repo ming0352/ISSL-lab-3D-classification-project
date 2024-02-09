@@ -240,16 +240,11 @@ if __name__ == "__main__":
     test_image_path=os.path.join('dataset','M11','test')
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
-    # parser.add_argument("-pr", "--pretrained_root", type=str,default=f'{pretrained_root}',
-    #     help="contain {pretrained_root}/best.pt, {pretrained_root}/config.yaml")
-    # parser.add_argument("-img", "--image", type=str,default=f'{test_image_path}',)
-    # parser.add_argument("-sn", "--save_name", type=str,default=f'1',)
     parser.add_argument("-lb", "--label", type=int)
     parser.add_argument("-usl", "--use_label", default=False, type=bool)
-    # parser.add_argument("-sum_t", "--sum_features_type", default="softmax", type=str)
     args = parser.parse_args()
 
-    folder_list=os.listdir(test_image_path)
+    folder_list=[name for name in os.listdir(test_image_path) if os.path.isdir(os.path.join(test_image_path, name))]
 
     is_show_top_5_prediction=True
 
