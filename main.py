@@ -11,7 +11,7 @@ from data.dataset import build_loader
 from utils.costom_logger import timeLogger
 from utils.config_utils import load_yaml, build_record_folder, get_args
 from utils.lr_schedule import cosine_decay, adjust_lr, get_lr
-from eval import evaluate, cal_train_metrics, suppression, cal_evalute_metrics
+from eval import evaluate, cal_train_metrics, suppression, cal_evalute_metrics, gradient_boost_cross_entropy,dual_cross_entropy
 from data.dataset import get_class2num
 from eval import get_length_dict
 warnings.simplefilter("ignore")
@@ -31,7 +31,7 @@ def set_environment(args, tlogger,is_train_aug=False,add_hands=False,idx_fold=-1
     
     print("Setting Environment...")
 
-    args.device = torch.device(args.which_gpu if torch.cuda.is_available() else "cpu")
+    args.device = torch.device('cuda' if torch.cuda.is_available() else "cpu")
     
     ### = = = =  Dataset and Data Loader = = = =  
     tlogger.print("Building Dataloader....")
@@ -107,18 +107,22 @@ def set_environment(args, tlogger,is_train_aug=False,add_hands=False,idx_fold=-1
     return train_loader, val_loader, model, optimizer, schedule, scaler, amp_context, start_epoch
 
 
-
 def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_loader):
-    
+    if args.loss_function == 'CE':
+        loss_function = F.cross_entropy
+    elif args.loss_function == 'GCE':
+        loss_function = gradient_boost_cross_entropy
+    elif args.loss_function == 'DCE':
+        loss_function = dual_cross_entropy
     optimizer.zero_grad()
-    total_batchs = len(train_loader) # just for log
-    show_progress = [x/10 for x in range(11)] # just for log
+    total_batchs = len(train_loader)  # just for log
+    show_progress = [x / 10 for x in range(11)]  # just for log
     progress_i = 0
 
     # temperature = 2 ** (epoch // 10 - 1)
     temperature = 0.5 ** (epoch // 10) * args.temperature
     # temperature = args.temperature
-    
+
     n_left_batchs = len(train_loader) % args.update_freq
 
     for batch_id, (ids, datas, labels) in enumerate(train_loader):
@@ -126,7 +130,7 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
         """ = = = = adjust learning rate = = = = """
         iterations = epoch * len(train_loader) + batch_id
         adjust_lr(iterations, optimizer, schedule)
-        
+
         # temperature = (args.temperature - 1) * (get_lr(optimizer) / args.max_lr) + 1
 
         batch_size = labels.size(0)
@@ -143,17 +147,20 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
                     'preds_0', 'preds_1'
                 FPN --> return 'layer1', 'layer2', 'layer3', 'layer4' (depend on your setting)
                 ~ --> return 'ori_out'
-            
+
             [Retuen Tensor]
                 'preds_0': logit has not been selected by Selector.
                 'preds_1': logit has been selected by Selector.
                 'comb_outs': The prediction of combiner.
             """
             outs = model(datas)
-
+            out = {}
+            for k, v in outs.items():
+                tmp = v.clone()
+                out[k] = tmp
             loss = 0.
             for name in outs:
-                
+
                 if "FPN1_" in name:
                     if args.lambda_b0 != 0:
                         aux_name = name.replace("FPN1_", "")
@@ -172,8 +179,7 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
                     if args.lambda_s != 0:
                         S = outs[name].size(1)
                         logit = outs[name].view(-1, args.num_classes).contiguous()
-                        loss_s = nn.CrossEntropyLoss()(logit, 
-                                                       labels.unsqueeze(1).repeat(1, S).flatten(0))
+                        loss_s = loss_function(logit,labels.unsqueeze(1).repeat(1, S).flatten(0))
                         loss += args.lambda_s * loss_s
                     else:
                         loss_s = 0.0
@@ -198,29 +204,30 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
                         raise ValueError("FPN not use here.")
                     if args.lambda_b != 0:
                         ### here using 'layer1'~'layer4' is default setting, you can change to your own
-                        loss_b = nn.CrossEntropyLoss()(outs[name].mean(1), labels)
+                        loss_b = loss_function(outs[name].mean(1), labels)
                         loss += args.lambda_b * loss_b
                     else:
                         loss_b = 0.0
-                
+
                 elif "comb_outs" in name:
                     if not args.use_combiner:
                         raise ValueError("Combiner not use here.")
 
                     if args.lambda_c != 0:
-                        loss_c = nn.CrossEntropyLoss()(outs[name], labels)
+                        loss_c = loss_function(outs[name], labels)
                         loss += args.lambda_c * loss_c
 
                 elif "ori_out" in name:
-                    loss_ori = F.cross_entropy(outs[name], labels)
+                    loss_ori = loss_function(outs[name], labels)
                     loss += loss_ori
-            
+
             if batch_id < len(train_loader) - n_left_batchs:
                 loss /= args.update_freq
             else:
                 loss /= n_left_batchs
-        
+
         """ = = = = calculate gradient = = = = """
+        loss=loss.to(args.device)
         if args.use_amp:
             scaler.scale(loss).backward()
         else:
@@ -230,7 +237,7 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
         if (batch_id + 1) % args.update_freq == 0 or (batch_id + 1) == len(train_loader):
             if args.use_amp:
                 scaler.step(optimizer)
-                scaler.update() # next batch
+                scaler.update()  # next batch
             else:
                 optimizer.step()
             optimizer.zero_grad()
@@ -241,17 +248,17 @@ def train(args, epoch, model, scaler, amp_context, optimizer, schedule, train_lo
             msg = {}
             msg['info/epoch'] = epoch + 1
             msg['info/lr'] = get_lr(optimizer)
-            cal_train_metrics(args, msg, outs, labels, batch_size, model.selector.thresholds)
+            cal_train_metrics(args, msg, out, labels, batch_size, model.selector.thresholds, loss_function)
             wandb.log(msg)
-        
+
         train_progress = (batch_id + 1) / total_batchs
         # print(train_progress, show_progress[progress_i])
         if train_progress > show_progress[progress_i]:
-            print(".."+str(int(show_progress[progress_i] * 100)) + "%", end='', flush=True)
+            print(".." + str(int(show_progress[progress_i] * 100)) + "%", end='', flush=True)
             progress_i += 1
 
 
-def main(args, tlogger,fold_img_label,idx_fold=''):
+def main(args, tlogger,fold_img_label=None,idx_fold=''):
     """
     save model last.pt and best.pt
     """
@@ -321,10 +328,16 @@ def main(args, tlogger,fold_img_label,idx_fold=''):
                 tlogger.print()
 
             if args.use_wandb:
+                if args.loss_function == 'CE':
+                    loss_function = F.cross_entropy
+                elif args.loss_function == 'GCE':
+                    loss_function = gradient_boost_cross_entropy
+                elif args.loss_function == 'DCE':
+                    loss_function = dual_cross_entropy
                 msg = {}
                 msg['info/epoch'] = epoch + 1
                 msg['info/lr'] = get_lr(optimizer)
-                cal_evalute_metrics(args, msg, val_loader, args.batch_size, model.selector.thresholds, model)
+                cal_evalute_metrics(args, msg, val_loader, args.batch_size, model.selector.thresholds, model,loss_function)
                 msg["val_acc/acc"] = acc
                 wandb.log(msg)
 
@@ -369,6 +382,11 @@ if __name__ == "__main__":
         print('start train ssl model...')
         run_ssl(ssl_args, tlogger)
     loop_times=1
+    # set gpu
+    if HERBS_args.which_gpu == 'cuda:0':
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    elif HERBS_args.which_gpu == 'cuda:1':
+        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     if HERBS_args.is_using_cross_validation:
         skf=StratifiedKFold(n_splits=3, random_state=32, shuffle=True)
         from data.dataset import get_train_image_list
@@ -377,7 +395,7 @@ if __name__ == "__main__":
         print("[dataset] class number:", num_classes)
         original_img_path_list, original_img_classes_list = get_train_image_list(HERBS_args.train_root, class2num)
         for i, (train_index, valid_index) in enumerate(skf.split(original_img_path_list, original_img_classes_list)):
-            # if i==0: continue
+            # if i==0 or i==1 : continue
             print(f"Fold {i}:")
             # print(f"  Train: index={train_index}")
             # print(f"  valid:  index={valid_index}")

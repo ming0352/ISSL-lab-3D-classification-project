@@ -9,7 +9,7 @@ pretrained: True
 warmup_batchs: 1500
 use_wandb: True
 wandb_entity: -
-model_name: MVImgNet_test
+model_name: MVImgNet_gray_test_0202
 data_size: 384
 optimizer: SGD
 use_amp: True

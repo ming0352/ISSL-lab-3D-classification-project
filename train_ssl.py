@@ -249,7 +249,11 @@ def set_environment(args, tlogger):
     return train_loader, val_loader, model, optimizer, schedule, scaler, amp_context, start_epoch
 def run_ssl(args,tlogger):
     start_time=time.time()
-
+    #set gpu
+    if args.which_gpu=='cuda:0':
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+    elif args.which_gpu=='cuda:1':
+        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     best_acc = 0.0
     if args.use_wandb:
         wandb.init(entity=args.wandb_entity,project=args.project_name, tags='ssl',name=args.model_name)

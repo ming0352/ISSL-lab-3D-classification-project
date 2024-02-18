@@ -241,7 +241,7 @@ if __name__ == "__main__":
     # ===== 0. get setting =====
     # pretrained_root = '.\\records\\FGVC-HERBS\\88class_hang_bbg\\'
     # test_image_path = './88_classes/train_dataset/M11_real_test_image'#走行驅動軸心套管1\\20231101_133529_HoloLens.jpg'  M11_real_test_image
-    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'M11_aug_90_50_nvimgnet_grayscale')
+    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'ssl(MVImgNet)_grayscale_fold_2')
     test_image_path = os.path.join('dataset','50_classes', '10_test_bbox_0119')
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
@@ -270,7 +270,7 @@ if __name__ == "__main__":
     total_time=0.0
     class2num = pt_file['class2num']
     n_img=0
-    save_folder_name = 'vis_center_replace_test_rgb_10_only0131'
+    save_folder_name = 'vis_center_replace_test_wx_color'
     load_model_time = time.time() - start_time
     # ===== 2. load image =====
     for i,folder in enumerate(folder_list):

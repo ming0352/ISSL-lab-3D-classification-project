@@ -1,3 +1,5 @@
+import copy
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -19,8 +21,10 @@ def suppression(target: torch.Tensor, threshold: torch.Tensor, temperature: floa
     # target = 1 - target
     return target
 
+
 @torch.no_grad()
-def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_size: int, thresholds: dict):
+def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_size: int, thresholds: dict,
+                      loss_function=None):
     """
     only present top-1 training accuracy
     """
@@ -29,20 +33,19 @@ def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_s
 
     if args.use_fpn:
         for i in range(1, 5):
-            acc = top_k_corrects(outs["layer"+str(i)].mean(1), labels, tops=[1])["top-1"] / batch_size
+            acc = top_k_corrects(outs["layer" + str(i)].mean(1), labels, tops=[1])["top-1"] / batch_size
             acc = round(acc * 100, 2)
             msg["train_acc/layer{}_acc".format(i)] = acc
-            loss = F.cross_entropy(outs["layer"+str(i)].mean(1), labels)
+            loss = loss_function(outs["layer" + str(i)].mean(1), labels)
             msg["train_loss/layer{}_loss".format(i)] = loss.item()
             total_loss += loss.item()
-            
-            gt_score_map = outs["layer"+str(i)]
-            thres = torch.Tensor(thresholds["layer"+str(i)])
+
+            gt_score_map = outs["layer" + str(i)]
+            thres = torch.Tensor(thresholds["layer" + str(i)])
             gt_score_map = suppression(gt_score_map, thres)
             logit = F.log_softmax(outs["FPN1_layer" + str(i)] / args.temperature, dim=-1)
             loss_b0 = nn.KLDivLoss()(logit, gt_score_map)
             msg["train_loss/layer{}_FPN1_loss".format(i)] = loss_b0.item()
-
 
     if args.use_selection:
         for name in outs:
@@ -51,7 +54,7 @@ def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_s
             B, S, _ = outs[name].size()
             logit = outs[name].view(-1, args.num_classes)
             labels_0 = labels.unsqueeze(1).repeat(1, S).flatten(0)
-            acc = top_k_corrects(logit, labels_0, tops=[1])["top-1"] / (B*S)
+            acc = top_k_corrects(logit, labels_0, tops=[1])["top-1"] / (B * S)
             acc = round(acc * 100, 2)
             msg["train_acc/{}_acc".format(name)] = acc
             labels_0 = torch.zeros([B * S, args.num_classes]) - 1
@@ -66,10 +69,10 @@ def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_s
             B, S, _ = outs[name].size()
             logit = outs[name].view(-1, args.num_classes)
             labels_1 = labels.unsqueeze(1).repeat(1, S).flatten(0)
-            acc = top_k_corrects(logit, labels_1, tops=[1])["top-1"] / (B*S)
+            acc = top_k_corrects(logit, labels_1, tops=[1])["top-1"] / (B * S)
             acc = round(acc * 100, 2)
             msg["train_acc/{}_acc".format(name)] = acc
-            loss = F.cross_entropy(logit, labels_1)
+            loss = loss_function(logit, labels_1)
             msg["train_loss/{}_loss".format(name)] = loss.item()
             total_loss += loss.item()
 
@@ -77,7 +80,7 @@ def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_s
         acc = top_k_corrects(outs['comb_outs'], labels, tops=[1])["top-1"] / batch_size
         acc = round(acc * 100, 2)
         msg["train_acc/combiner_acc"] = acc
-        loss = F.cross_entropy(outs['comb_outs'], labels)
+        loss = loss_function(outs['comb_outs'], labels)
         msg["train_loss/combiner_loss"] = loss.item()
         total_loss += loss.item()
 
@@ -85,23 +88,23 @@ def cal_train_metrics(args, msg: dict, outs: dict, labels: torch.Tensor, batch_s
         acc = top_k_corrects(outs["ori_out"], labels, tops=[1])["top-1"] / batch_size
         acc = round(acc * 100, 2)
         msg["train_acc/ori_acc"] = acc
-        loss = F.cross_entropy(outs["ori_out"], labels)
+        loss = loss_function(outs["ori_out"], labels)
         msg["train_loss/ori_loss"] = loss.item()
         total_loss += loss.item()
 
     msg["train_loss/total_loss"] = total_loss
 
 
-def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, thresholds: dict,model):
+def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, thresholds: dict, model, loss_function=None):
     """
     only present top-1 training accuracy
     """
     model.eval()
     total_loss = 0.0
+
     with torch.no_grad():
         """ accumulate """
         for batch_id, (ids, datas, labels) in enumerate(test_loader):
-
             datas, labels = datas.to(args.device), labels.to(args.device)
 
             outs = model(datas)
@@ -110,7 +113,7 @@ def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, threshold
                 acc = top_k_corrects(outs["layer" + str(i)].mean(1), labels, tops=[1])["top-1"] / batch_size
                 acc = round(acc * 100, 2)
                 msg["val_acc/layer{}_acc".format(i)] = acc
-                loss = F.cross_entropy(outs["layer" + str(i)].mean(1), labels)
+                loss = loss_function(outs["layer" + str(i)].mean(1), labels)
                 msg["val_loss/layer{}_loss".format(i)] = loss.item()
                 total_loss += loss.item()
 
@@ -146,7 +149,7 @@ def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, threshold
                 acc = top_k_corrects(logit, labels_1, tops=[1])["top-1"] / (B * S)
                 acc = round(acc * 100, 2)
                 msg["val_acc/{}_acc".format(name)] = acc
-                loss = F.cross_entropy(logit, labels_1)
+                loss = loss_function(logit, labels_1)
                 msg["val_loss/{}_loss".format(name)] = loss.item()
                 total_loss += loss.item()
 
@@ -154,7 +157,7 @@ def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, threshold
             acc = top_k_corrects(outs['comb_outs'], labels, tops=[1])["top-1"] / batch_size
             acc = round(acc * 100, 2)
             msg["val_acc/combiner_acc"] = acc
-            loss = F.cross_entropy(outs['comb_outs'], labels)
+            loss = loss_function(outs['comb_outs'], labels)
             msg["val_loss/combiner_loss"] = loss.item()
             total_loss += loss.item()
 
@@ -162,7 +165,7 @@ def cal_evalute_metrics(args, msg: dict, test_loader, batch_size: int, threshold
             acc = top_k_corrects(outs["ori_out"], labels, tops=[1])["top-1"] / batch_size
             acc = round(acc * 100, 2)
             msg["val_acc/ori_acc"] = acc
-            loss = F.cross_entropy(outs["ori_out"], labels)
+            loss = loss_function(outs["ori_out"], labels)
             msg["val_loss/ori_loss"] = loss.item()
             total_loss += loss.item()
 
@@ -292,7 +295,10 @@ def evaluate(args, model, test_loader):
             datas = datas.to(args.device)
 
             outs = model(datas)
-
+            out = {}
+            for k, v in outs.items():
+                tmp = v.clone()
+                out[k] = tmp
             if args.use_fpn:
                 for i in range(1, 5):
                     this_name = "layer" + str(i)
@@ -615,3 +621,109 @@ def count_total_pick_times(input_num,test_image_path,class2num,cls_folders):
         else:
             n_samples += len(os.listdir(os.path.join(test_image_path, cf)))
     return n_samples
+
+def log_softmax(x):
+    x=x.detach().cpu()
+    c = x.max()
+    logsumexp = np.log(np.exp(x - c).sum())
+    return x - c - logsumexp
+def gradient_boost_cross_entropy(preds,target):
+    #print(f'pred shape:{preds.size()},target shape:{target.size()}')
+    # ori_loss = F.cross_entropy(preds, target)
+    # print(f'loss:{ori_loss}')
+    # predd = preds.clone()
+    pred = F.log_softmax(preds,dim=1).clone()
+    # pred=torch.empty_like(predd).copy_(predd)
+    # _log_softmax = nn.LogSoftmax(dim=1)
+
+    # pred=_log_softmax(preds).clone()
+
+
+    #find first K item index
+    x1 = preds.detach()
+    #x1 = torch.autograd.Variable(x1)
+    # x1 = x1.sum(1)
+    x1[range(pred.size(0)), target] = -float("Inf")
+    topk_ind = torch.topk(x1, 5, dim=1)[1]
+
+
+    # prob = F.softmax(preds, dim=1)
+    # set not belong to target and first k item into -inf
+    index = torch.zeros(pred.size())
+    index[torch.tensor(range(x1.size(0))).unsqueeze(1), topk_ind] = True
+    index[torch.tensor(range(x1.size(0))).unsqueeze(0), target] = True
+    index=index.type(torch.bool)
+    pred[~index]= -float("Inf")
+
+
+
+
+    # loss = F.cross_entropy(pred, target)
+    loss = F.nll_loss(pred, target)
+    # print(f'custom loss:{loss}')
+
+    # # 使用top_indices提取对应的logits
+    # top_logits = torch.gather(preds, 1, top_indices)
+    #
+    # # 计算softmax
+    # new_probs=[]
+    # for i in range(prob.shape[0]):
+    #     tmp_y_prob_thresholded = np.where(prob[i].cpu().detach().numpy() > top_values[i][4].cpu().detach().numpy(), prob[i].cpu().detach().numpy(), 0)
+    #     new_probs.append(torch.tensor(tmp_y_prob_thresholded))
+    #     print(1)
+    # new_probs=torch.stack(new_probs).cuda()
+    #     for j in range(preds.shape[1]):
+    #         if j not in top_indices[i]:
+    #             preds[i][j]=0.0
+    # softmax_logits = F.softmax(preds, dim=1)
+    # 计算交叉熵损失
+    # loss = F.cross_entropy(preds, target)
+    # F.nll_loss(preds[index].view(target.shape[0], -1), target)
+    # preds = F.softmax(preds, dim=1)
+    # target= torch.gather(target,1,top_indices)
+    # preds=top_values
+    # print(f'after :=> pred shape:{preds.size.detach()()},target shape:{target.size()}')
+    # loss = F.nll_loss(new_probs, target)
+    return loss
+
+
+def aa(preds, target):
+    # print(f'pred shape:{preds.size()},target shape:{target.size()}')
+    ori_loss = F.cross_entropy(preds, target)
+    # print(f'loss:{ori_loss}')
+    pred = preds.clone()#F.log_softmax(preds, dim=-1)
+    index = torch.zeros(pred.size())
+    obj = torch.zeros(pred.size()).cuda()
+
+    x1 = pred.clone()
+    # x1 = torch.autograd.Variable(x1)
+    # x1 = x1.sum(1)
+    x1[range(pred.size(0)), target] = -float("Inf")
+    topk_ind = torch.topk(x1, 15, dim=1)[1]
+
+    # prob = F.softmax(preds, dim=1)
+
+    index[torch.tensor(range(x1.size(0))).unsqueeze(1), topk_ind] = True
+    index[torch.tensor(range(x1.size(0))).unsqueeze(1), target] = True
+    index = index.type(torch.bool)
+    pred[~index] = 0  # -float("Inf")
+    #loss = F.cross_entropy(pred, target)
+    loss = F.nll_loss(pred, target).cuda()
+
+    return loss
+def dual_cross_entropy(preds,target):
+    from utils.config_utils import load_yaml, build_record_folder, get_args
+    HERBS_args = get_args()
+    assert HERBS_args.c != "", "Please provide config file (.yaml)"
+    load_yaml(HERBS_args, HERBS_args.c)
+    ori_loss = F.cross_entropy(preds, target)
+    # print(f'loss:{ori_loss}')
+
+    ones = torch.sparse.torch.eye(preds.shape[1]).to(HERBS_args.which_gpu)
+    inverse_one_hot = -(ones.index_select(0, target) - 1)
+    negative_CE_loss = F.binary_cross_entropy_with_logits(1 + preds, inverse_one_hot)
+
+    # negative_CE_loss=sum(-(pred[range(len(target)), target]))/len(preds)
+    # print(f'custom loss:{loss}')
+
+    return ori_loss+4.5*negative_CE_loss

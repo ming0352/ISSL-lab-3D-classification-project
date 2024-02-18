@@ -1,6 +1,6 @@
 project_name: FGVC-HERBS
 notes: 'no inverse'
-exp_name: ssl(MVImgNet)_grayscale 
+exp_name: baseline(ImageNet)_grayscale #M11-augmentation_90_group_small  #M11-augmentation_90_n
 use_wandb: True
 wandb_entity: -
 train_root: ./dataset/50_classes/train/
@@ -19,7 +19,7 @@ use_amp: True
 use_fpn: True
 fpn_size: 1536
 use_selection: True
-num_selects: 
+num_selects:
   layer1: 256
   layer2: 128
   layer3: 64
@@ -37,12 +37,13 @@ temperature: 64
 add_hands: False
 is_train_aug : True
 combine_hands_path : ./combine_hands/
-isgrayscale: False
+isgrayscale: True
 which_gpu: cuda:0
+is_save_img: False
 #ssl
-use_ssl_pretrained_backbone: True
-ssl_pretrained_model_name: MVImgNet 70_RGB #MVImgNet_gray_test_0202
-
+use_ssl_pretrained_backbone: False
+ssl_pretrained_model_name: MVImgNet_gray_test_0202 #MVImgNet 70_RGB
+loss_function: CE #DCE GCE CE
 
 ## cross validation
 is_using_cross_validation: True

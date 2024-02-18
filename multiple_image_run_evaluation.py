@@ -106,7 +106,7 @@ def save_confusion_matrix(y_true, y_pred, class2num, output_path):
     # plt.clf()
     plt.figure(figsize=(20, 20))
     ax=sn.heatmap(df_cm2, annot=True)
-    ax.set_title('HERBS(MVImgNet)_grayscale',fontsize=60)
+    ax.set_title('HERBS(MVImgNet)_RGB',fontsize=60)
     plt.xlabel('Predicted',fontsize=48.0, fontweight='bold')
     plt.ylabel('Ground Truth',fontsize=48.0, fontweight='bold')
     plt.tight_layout()
@@ -128,13 +128,13 @@ def save_to_txt(test_acc, test_top5_acc, classification_report_save_path, y_true
 if __name__ == "__main__":
     tmp_rd=[]
     is_save_summary = False
-    isgrayscale=True
-    is_save_confusion_matrix=True
-    input_num =1 ####need setup this value,ex:1,3
+    isgrayscale=False
+    is_save_confusion_matrix=False
+    input_num =1####need setup this value,ex:1,3
     use_length_detection = True
     # ===== 0. get setting =====
-    pretrained_root=os.path.join('records', 'FGVC-HERBS', 'M11_aug_90_50_mvimgnet_grayscale')
-    test_image_path = os.path.join('dataset','50_classes', '10_test_bbox_0119')
+    pretrained_root=os.path.join('records', 'FGVC-HERBS', 'M11_aug_90_50_mvimgnet')
+    test_image_path = os.path.join('dataset','50_classes', 'test_replace_10')
     parser = argparse.ArgumentParser("Visualize SwinT Large")
 
     args = parser.parse_args()
@@ -247,7 +247,8 @@ if __name__ == "__main__":
             pd_total_class_img_num_dict[class2num[class_name]] += 1
             ld_pd_total_class_img_num_dict[class2num[class_name]] += 1
             for idx, img_name in enumerate(img_path):
-
+                if class2num[class_name]==11:
+                    print(11)
                 # record predict result
                 pd_img_name.append(img_name)
                 pd_class_idx.append(class2num[class_name])
@@ -347,7 +348,7 @@ if __name__ == "__main__":
             {'class id': top1_dic.keys(), 'class name': pd_class_name_list.values(),
              'total num img': pd_total_class_img_num_dict.values(), 'top1_correct': top1_dic.values(),
              'top1_acc': top1_acc_list, 'top5_correct': top5_dic.values(), 'top5_acc': top5_acc_list, })
-        df.to_excel(os.path.join(pretrained_root, '88classes_new.xlsx'))
+        df.to_excel(os.path.join(pretrained_root, '50_10_ori.xlsx'))
         top1_acc_list = [str(round(a / b, 3)) + f'({a})' for a, b in
                          zip(ld_top1_dic.values(), ld_pd_total_class_img_num_dict.values())]
         top5_acc_list = [str(round(a / b, 3)) + f'({a})' for a, b in
@@ -356,5 +357,5 @@ if __name__ == "__main__":
             {'class id': ld_top1_dic.keys(), 'class name': pd_class_name_list.values(),
              'total num img': ld_pd_total_class_img_num_dict.values(), 'top1_correct': ld_top1_dic.values(),
              'top1_acc': top1_acc_list, 'top5_correct':ld_top5_dic.values(), 'top5_acc': top5_acc_list, })
-        df.to_excel(os.path.join(pretrained_root, '88_classes_new_cp_gr_ld0.01_holo_0.02.xlsx'))
+        df.to_excel(os.path.join(pretrained_root, '50_10_ld.xlsx'))
     # print(tmp_rd)
