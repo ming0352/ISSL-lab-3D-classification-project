@@ -41,8 +41,8 @@ class ImgLoader(object):
         img = self.transform(image=img)['image']
         t = A.Compose(
             [
-                A.Resize(640, 640),
-                A.CenterCrop(self.img_size, self.img_size),
+                A.Crop(604, 186, 1314, 896),
+                A.Resize(self.img_size, self.img_size),
             ])
 
         ori_img=t(image=ori_img)['image']

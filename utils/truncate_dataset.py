@@ -80,7 +80,7 @@ def truncate_new_dataset(root_path,save_path,div_num):
             if idx > stop_index: break
             os.makedirs(os.path.join(save_path, folder), mode=0o777, exist_ok=True)
             shutil.copy(path_list[idx], os.path.join(os.path.join(save_path, folder),
-                                                     f'{idx + 1}_{percent_list[idx]}{path_list[idx].split(folder)[-1]}'))
+                                                     f'{idx + 1}_{percent_list[idx]}{os.path.split(path_list[idx])[-1]}'))
         shutil.copy(os.path.join(root_path, 'log.txt'), os.path.join(os.path.join(save_path, 'log.txt')))
         # df = pd.DataFrame({'class id': pd_class_id, 'class name': pd_class_name, 'index': pd_num, })
         # df.to_excel(os.path.join('qq.xlsx'))
