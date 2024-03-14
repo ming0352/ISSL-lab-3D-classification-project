@@ -13,7 +13,7 @@ import seaborn as sn
 import pandas as pd
 from sklearn.metrics import confusion_matrix, classification_report
 from eval import count_total_pick_times, avg_result, choose_random_paths, length_detection
-
+import time
 os.environ['TORCH_HOME'] = os.path.join('pretrained_model')
 
 
@@ -39,7 +39,7 @@ def build_model(pretrainewd_path: str,
                      num_selects=num_selects,
                      use_combiner=use_combiner,
                      comb_proj_size=comb_proj_size,
-                     isPretrained=True)
+                     isPretrained=False)
 
     if pretrainewd_path != "":
         ckpt = torch.load(pretrainewd_path)
@@ -68,6 +68,7 @@ def sum_all_out(out, sum_type="softmax"):
 
         if sum_type == "softmax":
             tmp_out = torch.softmax(tmp_out, dim=-1)
+            # pass
         if sum_out is None:
             sum_out = tmp_out
         else:
@@ -78,7 +79,7 @@ def sum_all_out(out, sum_type="softmax"):
 def save_confusion_matrix(y_true, y_pred, class2num, output_path):
     font = {'family': 'Microsoft YaHei',
             'weight': 'bold',
-            'size': 24}
+            'size': 12}
     plt.rc('font', **font)
 
     plt.clf()
@@ -106,9 +107,9 @@ def save_confusion_matrix(y_true, y_pred, class2num, output_path):
     # plt.clf()
     plt.figure(figsize=(20, 20))
     ax=sn.heatmap(df_cm2, annot=True)
-    ax.set_title('HERBS(MVImgNet)_RGB',fontsize=60)
-    plt.xlabel('Predicted',fontsize=48.0, fontweight='bold')
-    plt.ylabel('Ground Truth',fontsize=48.0, fontweight='bold')
+    ax.set_title('HERBS(ImageNet)_RGB',fontsize=48)
+    plt.xlabel('Predicted',fontsize=24.0, fontweight='bold')
+    plt.ylabel('Ground Truth',fontsize=24.0, fontweight='bold')
     plt.tight_layout()
     plt.savefig(os.path.join(output_path, 'confusion matrix1.png'))
     plt.clf()
@@ -126,17 +127,25 @@ def save_to_txt(test_acc, test_top5_acc, classification_report_save_path, y_true
 
 
 if __name__ == "__main__":
+    start_time=time.time()
+    load_model_time_list=[]
+    img_preprocessing_time_list = []
+    load_image_time_list = []
+    inference_time_list=[]
+    ld_time_list=[]
     tmp_rd=[]
     is_save_summary = False
     isgrayscale=False
-    is_save_confusion_matrix=False
-    input_num =1####need setup this value,ex:1,3
+    is_save_confusion_matrix= False
+    input_num =1 ####need setup this value,ex:1,3
     use_length_detection = True
     # ===== 0. get setting =====
-    pretrained_root=os.path.join('records', 'FGVC-HERBS', 'M11_aug_90_50_mvimgnet')
-    test_image_path = os.path.join('dataset','50_classes', 'test_replace_10')
+    pretrained_root=os.path.join('records', 'FGVC-HERBS', 'baseline(ImageNet)_fold_3')
+    test_image_path = os.path.join('dataset','50_classes', 'test_0301更正後')
     parser = argparse.ArgumentParser("Visualize SwinT Large")
 
+    #load model
+    tmp_time = time.time()
     args = parser.parse_args()
     model_pt_path = os.path.join(pretrained_root, "save_model", "best.pth")
     pt_file = torch.load(model_pt_path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
@@ -147,6 +156,7 @@ if __name__ == "__main__":
                         num_classes=pt_file['num_class'],
                         num_selects=pt_file['num_selects'])
     model.cuda()
+    load_model_time_list.append(time.time()-tmp_time)
 
     cls_folders = os.listdir(test_image_path)
     cls_folders.sort()
@@ -154,7 +164,6 @@ if __name__ == "__main__":
     if use_length_detection:
         ld_top1, ld_top3, ld_top5, ld_top7 = 0, 0, 0, 0
     total = 0
-    # n_samples = 0
     top_5_num_correct = 0
     top_7_num_correct = 0
     top_1_num_correct = 0
@@ -199,8 +208,6 @@ if __name__ == "__main__":
     for ci, cf in enumerate(cls_folders):
         # get class name from folder
         class_name = cf.split('.iam')[0].split('.ipt')[0]
-        # if '-' in class_name:
-        #     class_name = class_name.split('-')[1]
         # init dict
         if class2num[class_name] not in top1_dic:
             top1_dic[class2num[class_name]] = 0
@@ -247,8 +254,8 @@ if __name__ == "__main__":
             pd_total_class_img_num_dict[class2num[class_name]] += 1
             ld_pd_total_class_img_num_dict[class2num[class_name]] += 1
             for idx, img_name in enumerate(img_path):
-                if class2num[class_name]==11:
-                    print(11)
+                tmp_time = time.time()
+
                 # record predict result
                 pd_img_name.append(img_name)
                 pd_class_idx.append(class2num[class_name])
@@ -259,12 +266,14 @@ if __name__ == "__main__":
                 img_loader = ImgLoader(img_size=pt_file['img_size'],isgrayscale=isgrayscale)
                 img, ori_img = img_loader.load(img_path)
                 imgs = img.unsqueeze(0).cuda()  # add batch size dimension
-
+                load_image_time_list.append(time.time()-tmp_time)
                 with torch.no_grad():
+                    tmp_time = time.time()
                     imgs = imgs.cuda()
                     outs = model(imgs)
                     sum_outs = sum_all_out(outs, sum_type="softmax")  # softmax
                     probs, preds = torch.sort(sum_outs, dim=-1, descending=True)
+                    inference_time_list.append(time.time()-tmp_time)
                     y_pred.append(preds[0][0].cpu())  # Save Prediction
                     label = class2num[class_name]#.numpy()
                     y_true.append(label)
@@ -276,8 +285,10 @@ if __name__ == "__main__":
                 if input_num > 1:
                     preds, probs = avg_result(tmp_probs_list, tmp_preds_list)
                 if use_length_detection:
+                    tmp_time = time.time()
                     length_dict = pt_file['real_length_dict']
                     new_preds, new_probs = length_detection(length_dict, class_name, preds, probs, num2class)
+                    ld_time_list.append(time.time()-tmp_time)
                     # tmp_rd.append(rd_value)
 
                 pd_probs_list.append(probs[0].cpu())
@@ -296,13 +307,6 @@ if __name__ == "__main__":
                     ld_top7 += 1
 
             update_n += 1
-
-            # if class2num[cf] in preds[0][:1]:
-            #     top_1_num_correct += 1
-            #     top1_dic[class2num[cf]] += 1
-            # if class2num[cf] in preds[0][:5]:
-            #     top_5_num_correct += 1
-            #     top5_dic[class2num[cf]] += 1
 
             if class2num[class_name] in preds[0][:1]:
                 top1 += 1
@@ -338,17 +342,17 @@ if __name__ == "__main__":
         save_confusion_matrix(y_true, y_pred, class2num,pretrained_root)
 
     if is_save_summary and input_num==1:
-        # df = pd.DataFrame(
-        #     {'class id': pd_class_idx, 'class name': pd_class_name, 'img name': pd_img_name, 'preds': pd_preds_list,
-        #      'probs': pd_probs_list})
-        # df.to_excel(os.path.join(pretrained_root, '10_test_bbox_0119_predict_result.xlsx'))
+        df = pd.DataFrame(
+            {'class id': pd_class_idx, 'class name': pd_class_name, 'img name': pd_img_name, 'preds': pd_preds_list,
+             'probs': pd_probs_list})
+        df.to_excel(os.path.join(pretrained_root, 'all.xlsx'))
         top1_acc_list = [str(round(a / b,3))+f'({a})' for a, b in zip(top1_dic.values(), pd_total_class_img_num_dict.values())]
         top5_acc_list = [str(round(a / b,3))+f'({a})' for a, b in zip(top5_dic.values(), pd_total_class_img_num_dict.values())]
         df = pd.DataFrame(
             {'class id': top1_dic.keys(), 'class name': pd_class_name_list.values(),
              'total num img': pd_total_class_img_num_dict.values(), 'top1_correct': top1_dic.values(),
              'top1_acc': top1_acc_list, 'top5_correct': top5_dic.values(), 'top5_acc': top5_acc_list, })
-        df.to_excel(os.path.join(pretrained_root, '50_10_ori.xlsx'))
+        df.to_excel(os.path.join(pretrained_root, 'ori.xlsx'))
         top1_acc_list = [str(round(a / b, 3)) + f'({a})' for a, b in
                          zip(ld_top1_dic.values(), ld_pd_total_class_img_num_dict.values())]
         top5_acc_list = [str(round(a / b, 3)) + f'({a})' for a, b in
@@ -357,5 +361,7 @@ if __name__ == "__main__":
             {'class id': ld_top1_dic.keys(), 'class name': pd_class_name_list.values(),
              'total num img': ld_pd_total_class_img_num_dict.values(), 'top1_correct': ld_top1_dic.values(),
              'top1_acc': top1_acc_list, 'top5_correct':ld_top5_dic.values(), 'top5_acc': top5_acc_list, })
-        df.to_excel(os.path.join(pretrained_root, '50_10_ld.xlsx'))
+        df.to_excel(os.path.join(pretrained_root, 'ld.xlsx'))
     # print(tmp_rd)
+    end_time=time.time()
+    print(f'avg time={(end_time-start_time)/n_samples}')

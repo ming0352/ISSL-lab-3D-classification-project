@@ -12,8 +12,10 @@ class ImgLoader(object):
         self.isgrayscale=isgrayscale
         self.transform = A.Compose(
             [
-                A.Resize(640, 640),
-                A.CenterCrop(img_size, img_size),
+                # A.Resize(640, 640),
+                # A.CenterCrop(img_size, img_size),
+                A.Crop(604, 186,1314,896),
+                A.Resize(img_size, img_size),
                 A.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225]),#mean=0.5, std=1),
                 ToTensorV2(),

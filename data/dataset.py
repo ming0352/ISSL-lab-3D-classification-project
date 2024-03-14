@@ -1,6 +1,6 @@
 import os,random
 import numpy as np
-import cv2
+import cv2,os
 import torch
 from sklearn.model_selection import train_test_split
 
@@ -187,7 +187,7 @@ def build_loader(args,is_train_aug=False,add_hands=False,fold_img_label=None):
         y_train = [original_img_classes_list[i] for i in fold_img_label[0]]
         x_valid = [original_img_path_list[i] for i in fold_img_label[1]]
         y_valid = [original_img_classes_list[i] for i in fold_img_label[1]]
-
+        print(f'train length:{len(x_train)},valid length:{len(x_valid)}')
 
     train_set, train_loader = None, None
     if x_train is not None:
@@ -209,12 +209,15 @@ def build_loader(args,is_train_aug=False,add_hands=False,fold_img_label=None):
                 train_aug_set = ImageDataset(istrain=True, img_list=x_train, label_list=y_train, data_size=args.data_size,
                                      return_index=True,is_train_aug=is_train_aug,isgrayscale=args.isgrayscale,is_save=args.is_save_img,save_folder='train_aug',filename='aug')
             train_set = torch.utils.data.ConcatDataset([train_set, train_aug_set])
-        train_loader = torch.utils.data.DataLoader(train_set, num_workers=args.num_workers, shuffle=True, batch_size=args.batch_size)
+        train_loader = torch.utils.data.DataLoader(train_set, shuffle=True, batch_size=args.batch_size,num_workers=args.num_workers,
+        pin_memory=True,
+        persistent_workers=True,)
 
     val_set, val_loader = None, None
     if x_valid is not None:
         val_set = ImageDataset(istrain=False, img_list=x_valid,label_list=y_valid, data_size=args.data_size, return_index=True,isgrayscale=args.isgrayscale,is_save=args.is_save_img,save_folder='valid',filename='valid')
-        val_loader = torch.utils.data.DataLoader(val_set, num_workers=1, shuffle=True, batch_size=args.batch_size)
+        val_loader = torch.utils.data.DataLoader(val_set, num_workers=2, shuffle=True, batch_size=args.batch_size,pin_memory=True,
+        persistent_workers=True)
 
     return train_loader, val_loader
 
@@ -254,12 +257,13 @@ class ImageDataset(torch.utils.data.Dataset):
         if is_train_aug:
             self.transforms=A.Compose(
             [
+                A.CenterCrop(1080, 1080),
                 A.Resize(data_size, data_size),
-                A.ShiftScaleRotate(shift_limit=0.2, scale_limit=(-0.7,-0.3), rotate_limit=45,border_mode=cv2.BORDER_CONSTANT,value=0,p=0.5),
+                A.ShiftScaleRotate(shift_limit=0.2, scale_limit=0.2, rotate_limit=45,border_mode=cv2.BORDER_CONSTANT,value=0,p=0.5),
                 A.HorizontalFlip(p=0.5),
                 A.VerticalFlip(p=0.5),
-                A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2,p=0.5),
-                A.GaussianBlur (blur_limit=(3, 7),p=0.5),
+                A.RandomBrightnessContrast(brightness_limit=0.1, contrast_limit=0.1,p=0.5),
+                A.GaussianBlur (blur_limit=(3, 7),p=1),
                 A.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225]),
                 ToTensorV2(),
@@ -269,6 +273,7 @@ class ImageDataset(torch.utils.data.Dataset):
         elif istrain:
             self.transforms=A.Compose(
             [
+                A.CenterCrop(1080, 1080),
                 A.Resize(data_size, data_size),
                 A.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225]),
@@ -278,6 +283,7 @@ class ImageDataset(torch.utils.data.Dataset):
         else:
             self.transforms = A.Compose(
                 [
+                    A.CenterCrop(1080, 1080),
                     A.Resize(data_size, data_size),
                     A.Normalize(mean=[0.485, 0.456, 0.406],
                     std=[0.229, 0.224, 0.225]),

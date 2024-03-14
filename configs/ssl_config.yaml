@@ -8,7 +8,7 @@ batch_size: 2
 pretrained: True
 warmup_batchs: 1500
 use_wandb: True
-wandb_entity: -
+wandb_entity: ming0352
 model_name: MVImgNet_gray_test_0202
 data_size: 384
 optimizer: SGD

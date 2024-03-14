@@ -13,10 +13,10 @@ import timm
 import matplotlib
 import matplotlib.pyplot as plt
 import seaborn as sns
-
+from eval import count_total_pick_times
 from utils.config_utils import load_yaml
 from vis_utils import ImgLoader, get_cdict
-
+from tqdm import tqdm
 global module_id_mapper
 global features
 global grads
@@ -236,17 +236,13 @@ if __name__ == "__main__":
     pretrained_path to yaml file.
     """
     no_centercrop_list = []
-    isgrayscale=True
+    isgrayscale=False
     start_time=time.time()
     # ===== 0. get setting =====
-    # pretrained_root = '.\\records\\FGVC-HERBS\\88class_hang_bbg\\'
-    # test_image_path = './88_classes/train_dataset/M11_real_test_image'#走行驅動軸心套管1\\20231101_133529_HoloLens.jpg'  M11_real_test_image
-    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'ssl(MVImgNet)_grayscale_fold_2')
-    test_image_path = os.path.join('dataset','50_classes', '10_test_bbox_0119')
+    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'baseline(ImageNet)_truncate_div5_fold_3')
+    test_image_path = os.path.join('dataset','50_classes', 'test_0301更正後')
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
-    # parser.add_argument("-pr", "--pretrained_root", type=str,default=f'{pretrained_root}',
-    #     help="contain {pretrained_root}/best.pt, {pretrained_root}/config.yaml")
     parser.add_argument("-img", "--image", type=str,default=f'{test_image_path}',)
     parser.add_argument("-sn", "--save_name", type=str,default=f'1',)
     parser.add_argument("-lb", "--label", type=int)
@@ -256,7 +252,7 @@ if __name__ == "__main__":
 
     folder_list=os.listdir(test_image_path)
 
-    is_show_top_5_prediction=True
+    is_show_top_5_prediction=False
 
     model_pt_path = os.path.join(pretrained_root , "save_model","best.pth")
     pt_file = torch.load(model_pt_path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
@@ -270,7 +266,13 @@ if __name__ == "__main__":
     total_time=0.0
     class2num = pt_file['class2num']
     n_img=0
-    save_folder_name = 'vis_center_replace_test_wx_color'
+    n_samples = 0
+    update_n = 0
+    for ci, cf in enumerate(folder_list):
+        n_samples += len(os.listdir(os.path.join(test_image_path, cf)))
+
+    pbar = tqdm(total=n_samples, ascii=True)
+    save_folder_name = 'vis_center_replace_test_wrong'
     load_model_time = time.time() - start_time
     # ===== 2. load image =====
     for i,folder in enumerate(folder_list):
@@ -278,6 +280,7 @@ if __name__ == "__main__":
         img_list=os.listdir(os.path.join(test_image_path,f'{folder}'))
 
         for k,image in enumerate(img_list):
+            update_n += 1
             global module_id_mapper, features, grads
             module_id_mapper, features, grads = {}, {}, {}
             n_img+=1
@@ -346,4 +349,7 @@ if __name__ == "__main__":
                 #plt.show()
                 plt.clf()
                 plt.close('all')
+                pbar.update(update_n)
+                update_n = 0
+
     # print(f'total time:{total_time+load_model_time},avg:{(total_time+load_model_time)/n_img}')

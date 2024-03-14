@@ -134,7 +134,7 @@ class MVImgNet_Dataset(torch.utils.data.Dataset):
                     transforms.Resize([384, 384]),
                     #transforms.RandomCrop(84, padding=8),
                     transforms.ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4),
-                    transforms.RandomHorizontalFlip(),
+                    #transforms.RandomHorizontalFlip(),
                     # lambda x: np.asarray(x),
                     transforms.ToTensor(),
                     self.normalize

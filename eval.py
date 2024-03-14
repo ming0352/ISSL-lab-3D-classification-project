@@ -526,54 +526,43 @@ def get_length_dict(path):
 
         '''
     length_dict = {}
-    k = 0
     with open(path, encoding='utf8') as f:
         lines = f.readlines()
         for i in range(0, len(lines)):
-            if 'Start taking photo for' in lines[i]:
-                if ';' not in lines[i - 2]:
-                    k = 1
-                else:
-                    k = 0
-                max_length = float(lines[i - 2 - k].split()[-1].split(',')[0])
-                class_name = lines[i].split()
-                if '.' not in class_name[-1]:
-                    class_name.pop(-1)
-                class_name = class_name[-1].split('.iam')[0].split('.ipt')[0]#.split('-')[1]
+            if 'The size of ' in lines[i]:
+                a=float(lines[i].split(':')[-1].split(',')[0].split('mm')[0].split(' ')[-1])/1000
+                b=float(lines[i].split(':')[-1].split(',')[1].split('mm')[0].split(' ')[-1])/1000
+                c=float(lines[i].split(':')[-1].split(',')[2].split('mm')[0].split(' ')[-1])/1000
+                max_length = max(a,b,c)
+                class_name = lines[i].split(' :')[0].split('The size of ')[-1].split('.iam')[0].split('.ipt')[0]
+                if '_MIR' in class_name:
+                    class_name=class_name.split('_MIR')[0]
+
                 if class_name not in length_dict.keys():
                     length_dict[class_name] = max_length
     return length_dict
-
 def length_detection(length_dict, cf, preds, probs,num2class):
-    front_pred = []
-    back_pred = []
-    front_prob = []
-    back_prob = []
     ld_tolerance_scope = 0.01
     target_length = length_dict[cf]
     #holo_tolerance_scope = 0.01
 
+    preds_tmp=preds.detach().clone()
+    probs_tmp=probs.detach().clone()
     for i in range(0, len(preds[0])):
         P=length_dict[num2class[int(preds[0][i])]]
         if ld_tolerance_scope != 0:
-            rd_value=np.random.choice(np.arange(-ld_tolerance_scope, ld_tolerance_scope, 0.0001))
+            rd_value=np.random.choice(np.asarray([-ld_tolerance_scope, ld_tolerance_scope]))
             cmp_value = rd_value + target_length
         else:
             cmp_value = target_length
 
-        if abs(cmp_value - P) <= ld_tolerance_scope:
-            front_pred.append(int(preds[0][i]))
-            front_prob.append(float(probs[0][i]))
-        else:
-            back_pred.append(int(preds[0][i]))
-            back_prob.append(float(probs[0][i]))
+        if not ((P-ld_tolerance_scope) <= cmp_value <= (P+ld_tolerance_scope)):
+            preds_tmp = torch.cat([preds_tmp[preds_tmp != preds[0][i]],preds_tmp[preds_tmp == preds[0][i]]])
+            probs_tmp = torch.cat([probs_tmp[probs_tmp != probs[0][i]],probs_tmp[probs_tmp == probs[0][i]]])
 
-    new_pred = [*front_pred , *back_pred]
-    new_preds = torch.unsqueeze(torch.tensor(new_pred).cuda(), dim=0)
-    new_prob = [*front_prob , *back_prob]
-    new_probs = torch.unsqueeze(torch.tensor(new_prob).cuda(), dim=0)
-
-    return new_preds, new_probs#,rd_value
+        new_preds = torch.unsqueeze(torch.tensor(preds_tmp).cuda(), dim=0)
+        new_probs = torch.unsqueeze(torch.tensor(probs_tmp).cuda(), dim=0)
+    return new_preds, new_probs
 def choose_random_paths(files, paths, input_num):
     paths.sort()
     random.seed(2)

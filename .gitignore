@@ -11,3 +11,10 @@ data/__pycache__/randaug.cpython-38.pyc
 data/__pycache__/randaug.cpython-311.pyc
 records/FGVC-HERBS/M11-augmentation_90_n/config.yaml
 records/FGVC-HERBS/M11-augmentation_90_n/save_model/best.pth
+records/FGVC-HERBS/baseline(ImageNet)_fold_3/~$ori_48.xlsx
+records/FGVC-HERBS/baseline(ImageNet)_fold_3/save_model/best.pth
+records/FGVC-HERBS/baseline(ImageNet)_fold_3/save_model/last.pth
+.idea/3D model classification.iml
+.idea/misc.xml
+.idea/vcs.xml
+.idea/misc.xml

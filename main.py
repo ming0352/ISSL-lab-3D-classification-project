@@ -18,7 +18,7 @@ warnings.simplefilter("ignore")
 os.environ['TORCH_HOME']=os.path.join('pretrained_model')
 from train_ssl import run_ssl
 from sklearn.model_selection import KFold, StratifiedKFold
-
+from utils.truncate_dataset import truncate_new_dataset
 def eval_freq_schedule(args, epoch: int):
     if epoch >= args.max_epochs * 0.95:
         args.eval_freq = 1
@@ -364,6 +364,8 @@ def main(args, tlogger,fold_img_label=None,idx_fold=''):
                 wandb.run.summary["best_acc"] = best_acc
                 wandb.run.summary["best_eval_name"] = best_eval_name
                 wandb.run.summary["best_epoch"] = epoch + 1
+    del train_loader
+    del val_loader
     if args.use_wandb:
         wandb.finish()
 
@@ -387,18 +389,24 @@ if __name__ == "__main__":
         os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     elif HERBS_args.which_gpu == 'cuda:1':
         os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    if HERBS_args.is_truncate:
+        save_path = os.path.join(HERBS_args.train_root.split('train')[0], 'train_truncated')
+        truncate_new_dataset(HERBS_args.train_root, save_path, HERBS_args.div_num)
+        HERBS_args.train_root = save_path
     if HERBS_args.is_using_cross_validation:
-        skf=StratifiedKFold(n_splits=3, random_state=32, shuffle=True)
+        skf=StratifiedKFold(n_splits=HERBS_args.cross_validation_folds, random_state=32, shuffle=True)
+        print(f'total {HERBS_args.cross_validation_folds} fold')
         from data.dataset import get_train_image_list
         class2num = get_class2num(HERBS_args.train_root)
         num_classes = len(class2num)
         print("[dataset] class number:", num_classes)
         original_img_path_list, original_img_classes_list = get_train_image_list(HERBS_args.train_root, class2num)
+        print(f'total ori:{len(original_img_path_list)}')
         for i, (train_index, valid_index) in enumerate(skf.split(original_img_path_list, original_img_classes_list)):
             # if i==0 or i==1 : continue
             print(f"Fold {i}:")
-            # print(f"  Train: index={train_index}")
-            # print(f"  valid:  index={valid_index}")
+            print(f"  Train: index={len(train_index)}")
+            print(f"  valid:  index={len(valid_index)}")
 
             HERBS_args.exp_name=HERBS_args.exp_name.split('_fold_')[0]+'_fold_'+str(i)
             build_record_folder(HERBS_args)
