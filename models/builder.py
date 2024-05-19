@@ -251,25 +251,12 @@ def build_swintransformer(pretrained: bool = True,
             'layer3':32,
             'layer4':32
         }
-    # swin_base_patch4_window12_384_in22k
-    #swin_tiny_patch4_window7_224
+
     if pretrained==False:
         print("doesn't use ImageNet pretrained weight")
     else:
         print("use ImageNet pretrained weight")
-    backbone = timm.create_model('swin_large_patch4_window12_384_in22k', pretrained=pretrained)#swin_large_patch4_window12_384_in22k
-
-    if conf['use_ssl_pretrained_backbone'] is True:
-        folder_name = conf['ssl_pretrained_model_name']
-        print(f'use {folder_name} SSL pretrained backbone')
-        # SKD 100 pretrained
-
-        pretrained = torch.load(f'./pretrained_model/{folder_name}/best.pth')
-        pretrained_dict = {k: v for k, v in pretrained['model'].items() if k in backbone.state_dict() and ('patch' in k or'layer' in k or 'norm' in k )}
-        # for k, v in pretrained['model'].items(): or 'head' in k
-        #     print(k)
-        #backbone.head = torch.nn.Linear(in_features=1536, out_features=88, bias=True)
-        backbone.load_state_dict(pretrained_dict, strict=False)
+    backbone = timm.create_model('swin_large_patch4_window12_384_in22k', pretrained=pretrained)
 
     backbone.train()
     

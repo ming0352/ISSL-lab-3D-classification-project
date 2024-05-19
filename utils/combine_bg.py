@@ -1,12 +1,14 @@
 import copy
 import random
-import os
+import os,shutil
 from tqdm import tqdm
 import concurrent.futures
 from PIL import Image
 
-def remove_part_bg(img,color=None):
-
+def remove_component_bg(img,color=None):
+    """
+    convert background into transparent(RGBA)
+    """
     img = img.convert('RGBA')
     image = copy.deepcopy(img)
     newImage = []
@@ -25,58 +27,63 @@ def remove_part_bg(img,color=None):
     image.putdata(newImage)
     return image
 
-def resize_with_padding(img, expected_size):
-    from PIL import Image, ImageOps
+def resize_image(img, expected_size):
+    """
+    Resize image
+    """
+    from PIL import ImageOps
     img.thumbnail((expected_size[0], expected_size[1]))
-    # print(img.size)
-    delta_width = expected_size[0] - img.size[0]
-    delta_height = expected_size[1] - img.size[1]
-    pad_width = delta_width // 2
-    pad_height = delta_height // 2
-    padding = (pad_width, pad_height, delta_width - pad_width, delta_height - pad_height)
-    return ImageOps.expand(img, padding)
-def combine_bg_fg(image1, save_path):
+    return ImageOps.expand(img)
+def combine_bg_fg(image1, save_path,bg_path):
+    """
+    Combine background and foreground into single image
+    """
     img_size=(1920, 1080)
-    bg_path = os.path.join('hands_images')
+    bg_path = os.path.join(bg_path)
     bg_img_list = os.listdir(bg_path)
-    bg_path = random.choice(bg_img_list)
-    bg = Image.open(os.path.join('hands_images', bg_path))
+    bg_img_path = random.choice(bg_img_list)
+    bg = Image.open(os.path.join(bg_path,bg_img_path))
     bg = bg.convert('RGBA')
     bg = bg.resize(img_size)
-    l=[0.6,0.7,.8,.9,1]
-    scale=random.choice(l)
+    scale=1
     image1 = image1.resize((int(scale*img_size[0]), int(scale*img_size[1])))
-    image1=resize_with_padding(image1, img_size)
+    image1=resize_image(image1, img_size)
     bg.paste(image1, (0,0), image1)
     bg.convert('RGB').save(save_path)
 
-def process_image(img_path, save_path):
+def process_image(img_path, save_path,bg_path):
+    """
+    execute combine process
+    """
     with Image.open(img_path) as img:
-        rgba_img = remove_part_bg(img)
-        combine_bg_fg(rgba_img, save_path)
+        rgba_img = remove_component_bg(img)
+        combine_bg_fg(rgba_img, save_path, bg_path)
 
-def combine_hands(x_train):
+def combine_bg(args,base_train_path,save_path,x_train):
+    if os.path.isdir(save_path):
+        print('remove old combine folder')
+        shutil.rmtree(save_path, ignore_errors=True)
 
-
-    num_cores = os.cpu_count()-1
+    num_cores = os.cpu_count()-2
 
     total_img_num = 0
     with concurrent.futures.ProcessPoolExecutor(max_workers=num_cores) as executor:
         futures = []
         for img_path in x_train:
             total_img_num += 1
-            base_path = os.path.join('combine_hands')
+            base_path = save_path
             os.makedirs(name=os.path.join(base_path), mode=0o777, exist_ok=True)
-            folder_path = img_path.split('/')[-1].split('\\')[0]
+            folder_path = img_path.split('/')[-1].split('\\')[1]
             img_save_path=img_path.split('/')[-1].split('\\')[-1]
             os.makedirs(name=os.path.join(base_path, folder_path), mode=0o777, exist_ok=True)
-            output_img_path = os.path.join(base_path, folder_path, img_save_path)
+            output_img_path = os.path.join(base_path, folder_path,img_save_path)
             # process_image(img_path, output_img_path)
-            futures.append(executor.submit(process_image, img_path, output_img_path))
+            futures.append(executor.submit(process_image, img_path, output_img_path,args.bg_path))
         pbar = tqdm(total=total_img_num, ascii=True)
         for future in concurrent.futures.as_completed(futures):
             pbar.update(1)
     pbar.close()
+    shutil.copy(os.path.join(base_train_path, 'log.txt'), os.path.join(os.path.join(save_path, 'log.txt')))
 
 if __name__ == "__main__":
     pass

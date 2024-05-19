@@ -18,3 +18,4 @@ records/FGVC-HERBS/baseline(ImageNet)_fold_3/save_model/last.pth
 .idea/misc.xml
 .idea/vcs.xml
 .idea/misc.xml
+bg/*

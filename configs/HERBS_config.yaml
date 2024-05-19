@@ -1,13 +1,13 @@
 project_name: FGVC-HERBS
 notes: 'no inverse'
-exp_name: baseline(MVImgNet) #M11-augmentation_90_group_small  #M11-augmentation_90_n
+exp_name: baseline
 use_wandb: False
 wandb_entity: ~
-train_root: ./dataset/50_classes/train/
-val_root: ./CUB200-2011/test/
-data_size: 384
-num_workers: 2
+train_root: ./dataset/47_classes/4axes_train_90/
+model_type: HERBS #resnet18 convnext HERBS
 batch_size: 8
+num_workers: 2
+data_size: 384
 backbone_model_name: swin-l
 pretrained: ~
 optimizer: SGD
@@ -34,19 +34,18 @@ update_freq: 4
 log_freq: 1
 eval_freq:  1
 temperature: 64
-add_hands: False
+
 is_train_aug : True
-combine_hands_path : ./combine_hands/
 isgrayscale: False
 which_gpu: cuda:0
 is_save_img: False
-is_truncate: False
+# filter dataset
+is_truncate_train_dataset: False
 div_num: 5
-#ssl
-use_ssl_pretrained_backbone: False
-ssl_pretrained_model_name: MVImgNet 70_RGB #MVImgNet_gray_test_0202 #MVImgNet 70_RGB
-loss_function: CE #DCE GCE CE
+# combine bg
+train_combine_bg: False
+bg_path: ./bg
 
 ## cross validation
-is_using_cross_validation: False
+is_using_cross_validation: True
 cross_validation_folds: 5

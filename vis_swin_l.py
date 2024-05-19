@@ -9,18 +9,16 @@ import numpy as np
 import cv2
 import os,time
 import argparse
-import timm
 import matplotlib
 import matplotlib.pyplot as plt
-import seaborn as sns
-from eval import count_total_pick_times
-from utils.config_utils import load_yaml
-from vis_utils import ImgLoader, get_cdict
+from vis_utils import vis_ImgLoader, get_cdict
 from tqdm import tqdm
 global module_id_mapper
 global features
 global grads
-
+from models.classification_model import clf_model
+from utils.gradcam import GradCam
+from torchvision import transforms
 def forward_hook(module: nn.Module, inp_hs, out_hs):
     global features, module_id_mapper
     layer_id = len(features) + 1
@@ -191,165 +189,154 @@ def sum_all_out(out, sum_type="softmax"):
         else:
             sum_out = sum_out + tmp_out  # note that use '+=' would cause inplace error
     return sum_out/len(target_layer_names)
-def get_class2num(path):
+
+def visualize_image():
     """
-    get part class2num dict
-
-    Args:
-        path : dataset path
-
-    Returns:
-        class2num: part class2num dict
+    output heatmap into folder
     """
-
-    model_list = os.listdir(path)
-    model_list.sort()
-    class2num = {}
-    for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
-        class2num[class_name] = idx
-    return class2num
-def get_num2class(path):
-    """
-    get part class2num dict
-
-    Args:
-        path : dataset path
-
-    Returns:
-        class2num: part class2num dict
-    """
-
-    model_list = os.listdir(path)
-    model_list.sort()
-    num2class = {}
-    for idx, item in enumerate(model_list):
-        class_name = item.split('.fbx')[0]
-        num2class[idx] = class_name
-    return num2class
-if __name__ == "__main__":
-
-
-
-    """
-    Please add 
-    pretrained_path to yaml file.
-    """
-    no_centercrop_list = []
-    isgrayscale=False
-    start_time=time.time()
-    # ===== 0. get setting =====
-    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'baseline(ImageNet)_truncate_div5_fold_3')
-    test_image_path = os.path.join('dataset','50_classes', 'test_0301更正後')
+    isgrayscale = False
+    is_show_top_5_prediction = False
+    save_folder_name = 'heatmap'
+    start_time = time.time()
+    # ===== get setting =====
+    pretrained_root = os.path.join('records', 'FGVC-HERBS', 'exp2',
+                                   'baseline(ImageNet)_baseline_avg-20_max_47_HERBS_fold_2@')
+    test_image_path = os.path.join('dataset', '47_classes', 'similiar_part_test17')  # test_0301
 
     parser = argparse.ArgumentParser("Visualize SwinT Large")
-    parser.add_argument("-img", "--image", type=str,default=f'{test_image_path}',)
-    parser.add_argument("-sn", "--save_name", type=str,default=f'1',)
+    parser.add_argument("-img", "--image", type=str, default=f'{test_image_path}', )
+    parser.add_argument("-sn", "--save_name", type=str, default=f'1', )
     parser.add_argument("-lb", "--label", type=int)
     parser.add_argument("-usl", "--use_label", default=False, type=bool)
     parser.add_argument("-sum_t", "--sum_features_type", default="softmax", type=str)
     args = parser.parse_args()
 
-    folder_list=os.listdir(test_image_path)
+    # get folder list
+    folder_list = os.listdir(test_image_path)
 
-    is_show_top_5_prediction=False
-
-    model_pt_path = os.path.join(pretrained_root , "save_model","best.pth")
+    model_pt_path = os.path.join(pretrained_root, "save_model", "best.pth")
     pt_file = torch.load(model_pt_path, map_location=torch.device("cuda" if torch.cuda.is_available() else "cpu"))
-    # ===== 1. build model =====
-    model = build_model(pretrainewd_path=model_pt_path,
-                        img_size=pt_file['img_size'],
-                        fpn_size=pt_file['fpn_size'],
-                        num_classes=pt_file['num_class'],
-                        num_selects=pt_file['num_selects'])
-    model.cuda()
-    total_time=0.0
     class2num = pt_file['class2num']
-    n_img=0
+    # ===== build model =====
+    if 'HERBS' == pt_file['model_name']:
+        model = build_model(pretrainewd_path=model_pt_path,
+                            img_size=pt_file['img_size'],
+                            fpn_size=pt_file['fpn_size'],
+                            num_classes=pt_file['num_class'],
+                            num_selects=pt_file['num_selects'])
+    else:
+        batch_size = 32
+        learning_rate = 0.001
+        model = clf_model(len(class2num), learning_rate, batch_size, pt_file['model_name']).to('cuda')
+        model.load_state_dict(pt_file['model_state_dict'])
+    model.cuda()
+    total_time = 0.0
+    class2num = pt_file['class2num']
+    n_img = 0
     n_samples = 0
     update_n = 0
+    #calculate total image
     for ci, cf in enumerate(folder_list):
         n_samples += len(os.listdir(os.path.join(test_image_path, cf)))
 
     pbar = tqdm(total=n_samples, ascii=True)
-    save_folder_name = 'vis_center_replace_test_wrong'
-    load_model_time = time.time() - start_time
-    # ===== 2. load image =====
-    for i,folder in enumerate(folder_list):
-        start_time = time.time()
-        img_list=os.listdir(os.path.join(test_image_path,f'{folder}'))
 
-        for k,image in enumerate(img_list):
+    load_model_time = time.time() - start_time
+    # ===== load image =====
+    for i, folder in enumerate(folder_list):
+        start_time = time.time()
+        img_list = os.listdir(os.path.join(test_image_path, f'{folder}'))
+
+        for k, image in enumerate(img_list):
             update_n += 1
             global module_id_mapper, features, grads
             module_id_mapper, features, grads = {}, {}, {}
-            n_img+=1
-            if k !=0:
+            n_img += 1
+            if k != 0:
                 start_time = time.time()
-            tmp=time.time()
-            img_loader = ImgLoader(img_size=pt_file['img_size'],isgrayscale=isgrayscale)
-            img, ori_img = img_loader.load(os.path.join(test_image_path,f'{folder}',f'{image}'))
-
-        # ===== 3. forward and backward =====
-            img = img.unsqueeze(0).cuda() # add batch size dimension
-            load_image_time=time.time()-tmp
-            tmp=time.time()
-            out = model(img)
-            inference_time=time.time()-tmp
+            tmp = time.time()
+            img_loader = vis_ImgLoader(img_size=pt_file['img_size'], isgrayscale=isgrayscale)
+            img, ori_img = img_loader.load(test_image_path + f'\\{folder}\\{image}')
+            # ===== forward and backward =====
+            img = img.unsqueeze(0).cuda()  # add batch size dimension
+            load_image_time = time.time() - tmp
+            tmp = time.time()
+            out = model.forward(img)
+            inference_time = time.time() - tmp
 
             tmp = time.time()
-            sum_outs = sum_all_out(out, sum_type="softmax")  # softmax
-            probs,preds = torch.sort(sum_outs, dim=-1, descending=True)
-            postprocessing_time=time.time()-tmp
-            #probs=torch.softmax(probs, dim=-1)
+            if 'HERBS' == pt_file['model_name']:
+                sum_outs = sum_all_out(out, sum_type="softmax")
+                probs, preds = torch.sort(sum_outs, dim=-1, descending=True)
+            else:
+                pred = torch.nn.functional.softmax(out, -1)
+                probs, preds = pred.topk(len(class2num), dim=1)
+            postprocessing_time = time.time() - tmp
             tmp = time.time() - start_time
             total_time += tmp
             if is_show_top_5_prediction:
-                print(f'load model:{load_model_time},load img:{load_image_time},inference:{inference_time},postprocessing:{postprocessing_time}')
+                print(
+                    f'load model:{load_model_time},load img:{load_image_time},inference:{inference_time},postprocessing:{postprocessing_time}')
                 print(f'target:{class2num[folder]},top-5 class:{preds[0][:5]}, top-5 probs:{probs[0][:5]}')
                 print(f'total inference time:{tmp}')
 
-            if True:#class2num[folder] not in preds[0][:5]:
-                cal_backward(args, out, sum_type="softmax")
+            if True:  # class2num[folder] not in preds[0][:5]:
+                if 'HERBS' == pt_file['model_name']:
+                    cal_backward(args, out, sum_type="softmax")
 
-                # ===== 4. check result =====
-                grad_weights = get_grad_cam_weights(grads)
-                act_maps = plot_grad_cam(features, grad_weights)
+                    # ===== check result =====
+                    grad_weights = get_grad_cam_weights(grads)
+                    act_maps = plot_grad_cam(features, grad_weights)
 
-                # ===== 5. show =====
-                sum_act = None
-                resize = torchvision.transforms.Resize((pt_file['img_size'], pt_file['img_size']))
-                for name in act_maps:
-                    layer_name = "layer: {}".format(name)
-                    _act = act_maps[name]
-                    _act /= _act.max()
-                    r_act = resize(_act.unsqueeze(0))
-                    act_m = _act.cpu().numpy() * 255
-                    act_m = act_m.astype(np.uint8)
-                    act_m = cv2.resize(act_m, (pt_file['img_size'], pt_file['img_size']))
-                    if sum_act is None:
-                        sum_act = r_act
-                    else:
-                        sum_act *= r_act
+                    # ===== show =====
+                    sum_act = None
+                    resize = torchvision.transforms.Resize((pt_file['img_size'], pt_file['img_size']))
+                    for name in act_maps:
+                        layer_name = "layer: {}".format(name)
+                        _act = act_maps[name]
+                        _act /= _act.max()
+                        r_act = resize(_act.unsqueeze(0))
+                        act_m = _act.cpu().numpy() * 255
+                        act_m = act_m.astype(np.uint8)
+                        act_m = cv2.resize(act_m, (pt_file['img_size'], pt_file['img_size']))
+                        if sum_act is None:
+                            sum_act = r_act
+                        else:
+                            sum_act *= r_act
 
-                sum_act /= sum_act.max()
-                sum_act = torchvision.transforms.functional.adjust_gamma(sum_act, 1.0)
-                sum_act = sum_act.cpu().numpy()[0]
+                    sum_act /= sum_act.max()
+                    sum_act = torchvision.transforms.functional.adjust_gamma(sum_act, 1.0)
+                    sum_act = sum_act.cpu().numpy()[0]
 
-                os.makedirs(name=pretrained_root+f'\\{save_folder_name}\\', mode=0o777, exist_ok=True)
+                    os.makedirs(name=pretrained_root + f'\\{save_folder_name}\\', mode=0o777, exist_ok=True)
 
-                plt.cla()
-                cdict = get_cdict()
-                cmap = matplotlib.colors.LinearSegmentedColormap("jet_revice", cdict)
-                plt.imshow(ori_img[:, :, ::] / 255)
-                plt.imshow(sum_act, alpha=0.5, cmap=cmap) # , alpha=0.5, cmap='jet'
-                plt.axis('off')
-                plt.savefig(pretrained_root+f'\\{save_folder_name}\\{class2num[folder]}_{preds[0][0]}_{preds[0][1]}_{preds[0][2]}_{preds[0][3]}_{preds[0][4]}_{image}',
-                    bbox_inches='tight', pad_inches=0.0, transparent=True)
-                #plt.show()
-                plt.clf()
-                plt.close('all')
+                    plt.cla()
+                    cdict = get_cdict()
+                    cmap = matplotlib.colors.LinearSegmentedColormap("jet_revice", cdict)
+                    plt.imshow(ori_img[:, :, ::] / 255)
+                    plt.imshow(sum_act, alpha=0.5, cmap=cmap)
+                    plt.axis('off')
+                    plt.savefig(
+                        pretrained_root + f'\\{save_folder_name}\\{class2num[folder]}_{preds[0][0]}_{preds[0][1]}_{preds[0][2]}_{preds[0][3]}_{preds[0][4]}_{image}',
+                        bbox_inches='tight', pad_inches=0.0, transparent=True)
+                    # plt.show()
+                    plt.clf()
+                    plt.close('all')
+                else:
+                    grad_cam = GradCam(model, pt_file['model_name'])
+                    if pt_file['model_name'] == 'vgg16':
+                        target_layer = 30
+                    elif pt_file['model_name'] == 'resnet18':
+                        target_layer = 1
+                    elif pt_file['model_name'] == 'convnext':
+                        target_layer = 7
+
+                    feature_image = grad_cam(img, target_layer).squeeze(dim=0)
+                    feature_image = transforms.ToPILImage()(feature_image)
+                    os.makedirs(name=pretrained_root + f'\\{save_folder_name}\\', mode=0o777, exist_ok=True)
+                    feature_image.save(
+                        pretrained_root + f'\\{save_folder_name}\\{class2num[folder]}_{preds[0][0]}_{preds[0][1]}_{preds[0][2]}_{preds[0][3]}_{preds[0][4]}_{image}')
                 pbar.update(update_n)
                 update_n = 0
-
-    # print(f'total time:{total_time+load_model_time},avg:{(total_time+load_model_time)/n_img}')
+if __name__ == "__main__":
+    visualize_image()

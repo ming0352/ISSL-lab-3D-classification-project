@@ -1,21 +1,15 @@
-import torch, random
+import torch
 import warnings
-
 torch.autograd.set_detect_anomaly(True)
 warnings.simplefilter("ignore")
-import numpy as np
 import os
 import argparse
-import matplotlib.pyplot as plt
 import tqdm
-from vis_utils import ImgLoader
-import seaborn as sn
+from vis_utils import test_ImgLoader
 import pandas as pd
-from sklearn.metrics import confusion_matrix, classification_report
 from eval import count_total_pick_times, avg_result, choose_random_paths, length_detection
-
-os.environ['TORCH_HOME'] = os.path.join('pretrained_model')
-
+from models.classification_model import clf_model
+os.environ['TORCH_HOME'] = os.path.join('pretrained_model') #set pretrained model folder path
 
 def build_model(pretrainewd_path: str,
                 img_size: int,
@@ -39,12 +33,11 @@ def build_model(pretrainewd_path: str,
                      num_selects=num_selects,
                      use_combiner=use_combiner,
                      comb_proj_size=comb_proj_size,
-                     isPretrained=True)
+                     isPretrained=False)
 
     if pretrainewd_path != "":
         ckpt = torch.load(pretrainewd_path)
-        pretrained_dict = ckpt['model_state_dict']  # {k: v for k, v in ckpt['model_state_dict'].items() if
-        # k in model.state_dict() and 'head' not in k}  # ('patch' in k or 'layer' in k or 'norm' in k)}
+        pretrained_dict = ckpt['model_state_dict']
         model.load_state_dict(pretrained_dict, strict=True)
 
     model.eval()
@@ -74,72 +67,31 @@ def sum_all_out(out, sum_type="softmax"):
             sum_out = sum_out + tmp_out  # note that use '+=' would cause inplace error
     return sum_out / len(target_layer_names)
 
-
-def save_confusion_matrix(y_true, y_pred, class2num, output_path):
-    font = {'family': 'Microsoft YaHei',
-            'weight': 'bold',
-            'size': 24}
-    plt.rc('font', **font)
-
-    plt.clf()
-    ax = plt.subplot()
-    # plt.rcParams['font.family'] = ['Microsoft YaHei']
-    y_array = y_true + y_pred
-    cf_matrix = confusion_matrix(y_true, y_pred, labels=np.unique(y_array))
-    classes = [*class2num]
-    num2class = dict((value, key) for key, value in class2num.items())
-    if len(classes) > len(np.unique(y_array)):
-        target_classes = [num2class[i] for i in np.unique(y_array)]
-    else:
-        target_classes = classes
-    # df_cm = pd.DataFrame(cf_matrix / np.sum(cf_matrix, axis=1), index=target_classes,
-    #                      columns=target_classes)
-
-    df_cm2 = pd.DataFrame(cf_matrix, index=target_classes,
-                          columns=target_classes)
-    # plt.figure(figsize=(50, 20))
-    # sn.heatmap(df_cm, annot=True)
-    # plt.xlabel('Predicted',fontsize=48.0, fontweight='bold')
-    # plt.ylabel('Ground Truth',fontsize=48.0, fontweight='bold')
-    # plt.tight_layout()
-    # plt.savefig(os.path.join(output_path, 'confusion matrix.png'))
-    # plt.clf()
-    plt.figure(figsize=(20, 20))
-    ax = sn.heatmap(df_cm2, annot=True)
-    ax.set_title('HERBS(MVImgNet)_RGB', fontsize=60)
-    plt.xlabel('Predicted', fontsize=48.0, fontweight='bold')
-    plt.ylabel('Ground Truth', fontsize=48.0, fontweight='bold')
-    plt.tight_layout()
-    plt.savefig(os.path.join(output_path, 'confusion matrix1.png'))
-    plt.clf()
-    plt.close('all')
-
-
-def save_to_txt(test_acc, test_top5_acc, classification_report_save_path, y_true, y_pred):
-    with open(classification_report_save_path, 'a') as f:
-        f.write(f'model test acc: {test_acc:.3f}, test top5 acc: {test_top5_acc:.3f}\n')
-        f.write(classification_report(y_true, y_pred, zero_division=0))
-        f.write('\n')
-
-
 def load_model(model_pt_path, pt_file):
-    model = build_model(pretrainewd_path=model_pt_path,
-                        img_size=pt_file['img_size'],
-                        fpn_size=pt_file['fpn_size'],
-                        num_classes=pt_file['num_class'],
-                        num_selects=pt_file['num_selects'])
-    return model.cuda()
-
+    if 'HERBS' == pt_file['model_name'] :
+        model = build_model(pretrainewd_path=model_pt_path,
+                            img_size=pt_file['img_size'],
+                            fpn_size=pt_file['fpn_size'],
+                            num_classes=pt_file['num_class'],
+                            num_selects=pt_file['num_selects'])
+    else:
+        batch_size = 32
+        learning_rate = 0.0001
+        model = clf_model(len(pt_file['class2num']), learning_rate, batch_size, pt_file['model_name']).to('cuda')
+        model.load_state_dict(pt_file['model_state_dict'])
+    model.cuda()
+    model.eval()
+    return model
 
 def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_list, test_times, use_length_detection,
-                   test_folder):
+                   test_image_path,exp):
     for model_base_name in model_base_name_list:
         if 'grayscale' in model_base_name:
             isgrayscale = True
+            print('grayscale')
         else:
             isgrayscale = False
         for fold in range(total_fold):
-            # if fold!=4: continue
             xl_model_name = []
             single_top1, single_top2, single_top3, single_top4, single_top5 = [], [], [], [] ,[]
             fold_index_list = []
@@ -155,8 +107,7 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                 for test_time in range(test_times):
                     print(f'{model_name}  No.{test_time + 1} times ,input num:{input_num}')
                     # ===== 0. get setting =====
-                    pretrained_root = os.path.join('records', 'FGVC-HERBS', model_name)
-                    test_image_path = os.path.join('dataset', '50_classes', test_folder)
+                    pretrained_root = os.path.join('records', 'FGVC-HERBS',exp,model_name)
                     parser = argparse.ArgumentParser("Visualize SwinT Large")
 
                     args = parser.parse_args()
@@ -171,13 +122,7 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                     if use_length_detection:
                         ld_top1,ld_top2,ld_top3, ld_top4, ld_top5, ld_top7 = 0, 0, 0, 0, 0, 0
                     total = 0
-                    # n_samples = 0
-
-                    top_7_num_correct = 0
                     top_5_num_correct = 0
-                    top_4_num_correct = 0
-                    top_3_num_correct = 0
-                    top_2_num_correct = 0
                     top_1_num_correct = 0
                     # pick_times=0
 
@@ -186,7 +131,6 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
 
                     # count n_samples
                     n_samples = count_total_pick_times(input_num, test_image_path, class2num, cls_folders)
-
                     pbar = tqdm.tqdm(total=n_samples, ascii=True)
 
                     # for summary
@@ -225,16 +169,20 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
 
                                 img_path = os.path.join(test_image_path, cf, img_name)
                                 img_paths.append(img_path)
-                                img_loader = ImgLoader(img_size=pt_file['img_size'], isgrayscale=isgrayscale)
-                                img, ori_img = img_loader.load(img_path)
+                                img_loader = test_ImgLoader(img_size=pt_file['img_size'], isgrayscale=isgrayscale)
+                                img = img_loader.load(img_path)
                                 imgs = img.unsqueeze(0).cuda()  # add batch size dimension
 
                                 with torch.no_grad():
                                     imgs = imgs.cuda()
-                                    outs = model(imgs)
-                                    sum_outs = sum_all_out(outs, sum_type="softmax")  # softmax
-                                    probs, preds = torch.sort(sum_outs, dim=-1, descending=True)
-   
+                                    outs = model.forward(imgs)
+                                    if 'HERBS' == pt_file['model_name'] :
+                                        sum_outs = sum_all_out(outs, sum_type="softmax")  # softmax
+                                        probs, preds = torch.sort(sum_outs, dim=-1, descending=True)
+                                    else:
+                                        pred = torch.nn.functional.softmax(outs, -1)
+                                        probs, preds = pred.topk(len(class2num), dim=1)
+
                                 if input_num > 1:
                                     tmp_preds_list.append(preds[0])
                                     tmp_probs_list.append(probs[0])
@@ -246,13 +194,11 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                                     length_dict = pt_file['real_length_dict']
                                     new_preds, new_probs = length_detection(length_dict, class_name, preds, probs,
                                                                             num2class)
-                                    # tmp_rd.append(rd_value)
 
                             # length detection count correct
                             if use_length_detection:
                                 if class2num[class_name] in new_preds[0][:1]:
                                     ld_top1 += 1
-                                    # ld_top1_dic[class2num[class_name]] += 1
                                 if class2num[class_name] in new_preds[0][:2]:
                                     ld_top2 += 1
                                 if class2num[class_name] in new_preds[0][:3]:
@@ -261,7 +207,6 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                                     ld_top4 += 1
                                 if class2num[class_name] in new_preds[0][:5]:
                                     ld_top5 += 1
-                                    # ld_top5_dic[class2num[class_name]] += 1
                                 if class2num[class_name] in new_preds[0][:7]:
                                     ld_top7 += 1
 
@@ -270,7 +215,6 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                             if class2num[class_name] in preds[0][:1]:
                                 top1 += 1
                                 top_1_num_correct += 1
-                                # top1_dic[class2num[class_name]] += 1
                             if class2num[class_name] in preds[0][:2]:
                                 top2 += 1
                             if class2num[class_name] in preds[0][:3]:
@@ -280,7 +224,6 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                             if class2num[class_name] in preds[0][:5]:
                                 top5 += 1
                                 top_5_num_correct += 1
-                                # top5_dic[class2num[class_name]] += 1
                             if class2num[class_name] in preds[0][:7]:
                                 top7 += 1
 
@@ -297,7 +240,6 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                                 ld_top3_acc = round(ld_top3 / total * 100, 3)
                                 ld_top4_acc = round(ld_top4 / total * 100, 3)
                                 ld_top5_acc = round(ld_top5 / total * 100, 3)
-                                ld_top7_acc = round(ld_top7 / total * 100, 3)
 
                             msg = ("top1: {}%, top2: {}%, top3: {}%, top4: {}% top5: {}%, top7: {}%"
                                    .format(top1_acc,top2_acc, top3_acc,top4_acc, top5_acc,top7_acc))
@@ -315,7 +257,6 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
 
                     if use_length_detection:
                         print(f'use length detection top1: {ld_top1_acc}%,top2: {ld_top2_acc},top3: {ld_top3_acc}%, top4: {ld_top4_acc}%, %top5: {ld_top5_acc}%')
-                        collect_top1, collect_top5 = None, None
                         if input_num == 1:
                             if test_time == 0:
                                 ld_single_top1_1.append(ld_top1_acc)
@@ -336,12 +277,13 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                                 ld_single_top4_3.append(ld_top4_acc)
                                 ld_single_top5_3.append(ld_top5_acc)
 
- 
-
             if is_save_to_xlsx:
- 
                 df = pd.DataFrame(
-                    data={'model name': xl_model_name, 'fold': fold_index_list, 'single top1': single_top1,
+                    data={'model name': xl_model_name, 'fold': fold_index_list,
+                          'single top1': single_top1,
+                          'single top2': single_top2,
+                          'single top3': single_top3,
+                          'single top4': single_top4,
                           'single top5': single_top5,
                           'top1 single LD 1': ld_single_top1_1, 'top1 single LD 2': ld_single_top1_2,'top1 single LD 3': ld_single_top1_3,'avg single LD top1': [(ld_single_top1_1[0] + ld_single_top1_2[0] + ld_single_top1_3[0]) / 3],
                           'top2 single LD 1': ld_single_top2_1, 'top2 single LD 2': ld_single_top2_2,'top2 single LD 3': ld_single_top2_3,'avg single LD top2': [(ld_single_top2_1[0] + ld_single_top2_2[0] + ld_single_top2_3[0]) / 3],
@@ -349,33 +291,38 @@ def run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_
                           'top4 single LD 1': ld_single_top4_1, 'top4 single LD 2': ld_single_top4_2,'top4 single LD 3': ld_single_top4_3,'avg single LD top4': [(ld_single_top4_1[0] + ld_single_top4_2[0] + ld_single_top4_3[0]) / 3],
                           'top5 single LD 1': ld_single_top5_1, 'top5 single LD 2': ld_single_top5_2,'top5 single LD 3': ld_single_top5_3,'avg single LD top5': [(ld_single_top5_1[0] + ld_single_top5_2[0] + ld_single_top5_3[0]) / 3],
                           })
-                if not os.path.isfile(f'{model_base_name}.xlsx'):
-                    df.to_excel(f'{model_base_name}.xlsx', index=False, header=True)
+                if not os.path.isfile(os.path.join('records', 'FGVC-HERBS',exp,f'{model_base_name}.xlsx')):
+                    df.to_excel(os.path.join('records', 'FGVC-HERBS',exp,f'{model_base_name}.xlsx'), index=False, header=True)
                 else:
                     import openpyxl
-                    wb = openpyxl.load_workbook(f'{model_base_name}.xlsx')
+                    wb = openpyxl.load_workbook(os.path.join('records', 'FGVC-HERBS',exp,f'{model_base_name}.xlsx'))
 
                     sheet = wb.active
 
                     for index, row in df.iterrows():
                         sheet.append(row.values.tolist())
 
-                    wb.save(f'{model_base_name}.xlsx')
+                    wb.save(os.path.join('records', 'FGVC-HERBS',exp,f'{model_base_name}.xlsx'))
 
 
 if __name__ == "__main__":
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'
     total_fold = 5
-    model_base_name_list = ['baseline(ImageNet)_truncate_div5']  # 'baseline(ImageNet)_truncate_div5'
+    exp='exp2'
+    model_base_name_list = ['baseline(ImageNet)_4axes_avg_20_max_fix_size_47_50epochs_0.001_resnet18',
+                            'baseline(ImageNet)_avg-20_max_47_0.001_convnext',
+                            'baseline(ImageNet)_baseline_47_0.001_again_resnet18',
+                            'baseline(ImageNet)_baseline_47_0.001_convnext',
+                            ]
     is_save_to_xlsx = True
-    input_num_list = [1]  ####need setup this value,ex:1,3
+    input_num_list = [1]
     test_times = 3
     is_save_summary = False
-    # isgrayscale=False
     is_save_confusion_matrix = False
     use_length_detection = True
-    test_folder = 'test_0301更正後'
+    test_folder = os.path.join('dataset', '47_classes', 'similiar_part_test17')
     run_kfold_test(model_base_name_list, total_fold, is_save_to_xlsx, input_num_list, test_times, use_length_detection,
-                   test_folder)
+                   test_folder,exp)
 
 
 

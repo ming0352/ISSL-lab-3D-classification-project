@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="9ea8c579-abb2-4cc0-9a90-d2cea8cddefb" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/models/classification_model.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/run_HERBS.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/run_clf_model.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/utils/gradcam.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/3D model classification.iml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/.gitignore" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/README.md" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataloader.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataset/cifar.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataset/custom_dataset.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataset/dataset_selfsupervision.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataset/mini_imagenet.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataset/tiered_imagenet.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/dataset/transform_cfg.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/distill/NCEAverage.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/distill/NCECriterion.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/distill/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/distill/alias_multinomial.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/distill/criterion.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/distill/util.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/eval/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/eval/cls_eval.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/eval/meta_eval.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/eval/util.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/eval_fewshot.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/convnet.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/herbs.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/resnet.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/resnet_new.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/resnet_sd.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/resnet_selfdist.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/resnet_ssl.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/util.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/models/wresnet.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/requirements.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/run.sh" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/train_distillation.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/train_selfsupervison.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/util.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/utils/figs/main.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/utils/figs/results1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/utils/figs/results2.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/SKD/utils/figs/training.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/HERBS_config.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/configs/HERBS_config.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/configs/ssl_config.yaml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/data/dataset.py" beforeDir="false" afterPath="$PROJECT_DIR$/data/dataset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/eval.py" beforeDir="false" afterPath="$PROJECT_DIR$/eval.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/hands_images/IMG_6037.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/hands_images/IMG_6038.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/hands_images/IMG_6039.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/hands_images/IMG_6040.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/hands_images/IMG_6041.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/kfold_test.py" beforeDir="false" afterPath="$PROJECT_DIR$/kfold_test.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/builder.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/builder.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/multiple_image_run_evaluation.py" beforeDir="false" afterPath="$PROJECT_DIR$/multiple_image_run_evaluation.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/predict.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_eval.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/run_evaluation.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/train_ssl.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/combine_bg.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/combine_bg.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/truncate_dataset.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/truncate_dataset.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vis_swin_l.py" beforeDir="false" afterPath="$PROJECT_DIR$/vis_swin_l.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/vis_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/vis_utils.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 3
+}</component>
+  <component name="ProjectId" id="2clo2UNCfhapqGzZDhkHjczsUF2" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/3D-model-classification&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  }
+}</component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="9ea8c579-abb2-4cc0-9a90-d2cea8cddefb" name="Changes" comment="" />
+      <created>1708695318841</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1708695318841</updated>
+      <workItem from="1708695319898" duration="1049000" />
+      <workItem from="1709432084382" duration="151000" />
+      <workItem from="1710396252566" duration="9743000" />
+      <workItem from="1712479857025" duration="2396000" />
+      <workItem from="1715506639680" duration="1278000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/ISSL_lab_3D_classification_project$multiple_image_run_evaluation.coverage" NAME="multiple_image_run_evaluation Coverage Results" MODIFIED="1710408414540" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+  </component>
+</project>
