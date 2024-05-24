@@ -544,24 +544,25 @@ def get_length_dict(path):
 def length_detection(length_dict, cf, preds, probs,num2class):
     ld_tolerance_scope = 0.01
     target_length = length_dict[cf]
-    #holo_tolerance_scope = 0.01
+    if ld_tolerance_scope != 0:
+        rd_value = np.random.choice(np.asarray([-ld_tolerance_scope, ld_tolerance_scope]))
+        cmp_value = rd_value + target_length
+    else:
+        cmp_value = target_length
 
-    preds_tmp=preds.detach().clone()
-    probs_tmp=probs.detach().clone()
+    front, back = [], []
     for i in range(0, len(preds[0])):
-        P=length_dict[num2class[int(preds[0][i])]]
-        if ld_tolerance_scope != 0:
-            rd_value=np.random.choice(np.asarray([-ld_tolerance_scope, ld_tolerance_scope]))
-            cmp_value = rd_value + target_length
+        P = length_dict[num2class[int(preds[0][i])]]
+
+        if not ((P - ld_tolerance_scope) <= cmp_value <= (P + ld_tolerance_scope)):
+            front.append(i)
         else:
-            cmp_value = target_length
+            back.append(i)
 
-        if not ((P-ld_tolerance_scope) <= cmp_value <= (P+ld_tolerance_scope)):
-            preds_tmp = torch.cat([preds_tmp[preds_tmp != preds[0][i]],preds_tmp[preds_tmp == preds[0][i]]])
-            probs_tmp = torch.cat([probs_tmp[probs_tmp != probs[0][i]],probs_tmp[probs_tmp == probs[0][i]]])
-
-        new_preds = torch.unsqueeze(torch.tensor(preds_tmp).cuda(), dim=0)
-        new_probs = torch.unsqueeze(torch.tensor(probs_tmp).cuda(), dim=0)
+    front_preds = torch.cat([preds[0][front], preds[0][back]])
+    front_probs = torch.cat([probs[0][front], probs[0][back]])
+    new_preds = torch.unsqueeze(front_preds.cuda(), dim=0)
+    new_probs = torch.unsqueeze(front_probs.cuda(), dim=0)
     return new_preds, new_probs
 def choose_random_paths(files, paths, input_num):
     paths.sort()
@@ -611,8 +612,3 @@ def count_total_pick_times(input_num,test_image_path,class2num,cls_folders):
             n_samples += len(os.listdir(os.path.join(test_image_path, cf)))
     return n_samples
 
-def log_softmax(x):
-    x=x.detach().cpu()
-    c = x.max()
-    logsumexp = np.log(np.exp(x - c).sum())
-    return x - c - logsumexp
