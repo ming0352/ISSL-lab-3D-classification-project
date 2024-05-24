@@ -555,9 +555,9 @@ def length_detection(length_dict, cf, preds, probs,num2class):
         P = length_dict[num2class[int(preds[0][i])]]
 
         if not ((P - ld_tolerance_scope) <= cmp_value <= (P + ld_tolerance_scope)):
-            front.append(i)
-        else:
             back.append(i)
+        else:
+            front.append(i)
 
     front_preds = torch.cat([preds[0][front], preds[0][back]])
     front_probs = torch.cat([probs[0][front], probs[0][back]])
