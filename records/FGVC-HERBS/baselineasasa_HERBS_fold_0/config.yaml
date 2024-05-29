@@ -1,5 +1,4 @@
 project_name: FGVC-HERBS
-notes: 'no inverse'
 exp_name: baselineasasa
 use_wandb: False
 wandb_entity: ~

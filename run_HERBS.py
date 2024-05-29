@@ -387,7 +387,6 @@ def run_HERBS_train(HERBS_args):
         original_img_path_list, original_img_classes_list = get_train_image_list(HERBS_args.train_root, class2num)
         print(f'total ori:{len(original_img_path_list)}')
         for i, (train_index, valid_index) in enumerate(skf.split(original_img_path_list, original_img_classes_list)):
-            if i==4: continue
             print(f"Fold {i}:")
             # print(f"  Train: index={train_index}")
             # print(f"  valid:  index={valid_index}")
